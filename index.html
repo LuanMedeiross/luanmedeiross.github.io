@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Aliffer Luan — Offensive Security Analyst | Pentest, Bug Bounty, Security Research" />
+  <meta name="keywords" content="pentest, bug bounty, offensive security, analista de segurança, XSS, SQL injection, SSRF, RCE" />
+  <title>Aliffer Luan — Offensive Security</title>
+
+  <style>
+    :root {
+      --bg:        #0d1117;
+      --surface:   #161b22;
+      --border:    #30363d;
+      --green:     #3fb950;
+      --green-dim: #1a4a26;
+      --cyan:      #58a6ff;
+      --red:       #f85149;
+      --orange:    #d29922;
+      --text:      #e6edf3;
+      --muted:     #8b949e;
+      --radius:    8px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      font-size: 15px;
+      line-height: 1.6;
+    }
+
+    a { color: var(--cyan); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    code, .mono {
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      font-size: 0.85em;
+    }
+
+    /* ── NAV ─────────────────────────────────────────── */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      background: rgba(13, 17, 23, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 2rem;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .nav-brand {
+      font-family: 'SF Mono', monospace;
+      font-size: 0.9rem;
+      color: var(--green);
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 1.5rem;
+      list-style: none;
+    }
+
+    .nav-links a {
+      color: var(--muted);
+      font-size: 0.875rem;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--text); text-decoration: none; }
+
+    /* ── LAYOUT ──────────────────────────────────────── */
+    .container {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 0 1.5rem;
+    }
+
+    section { padding: 5rem 0; }
+
+    .section-label {
+      font-family: 'SF Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--green);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      margin-bottom: 0.5rem;
+    }
+
+    h2 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 2rem;
+    }
+
+    /* ── HERO ────────────────────────────────────────── */
+    #hero {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      padding-top: 56px;
+    }
+
+    .hero-inner { max-width: 680px; }
+
+    .hero-tag {
+      display: inline-block;
+      background: var(--green-dim);
+      color: var(--green);
+      font-family: 'SF Mono', monospace;
+      font-size: 0.8rem;
+      padding: 3px 10px;
+      border-radius: 4px;
+      margin-bottom: 1.5rem;
+    }
+
+    .hero-name {
+      font-size: clamp(2.2rem, 6vw, 3.5rem);
+      font-weight: 800;
+      line-height: 1.1;
+      margin-bottom: 1rem;
+      letter-spacing: -0.02em;
+    }
+
+    .hero-name span { color: var(--green); }
+
+    .hero-subtitle {
+      font-size: 1.15rem;
+      color: var(--muted);
+      margin-bottom: 2rem;
+      max-width: 520px;
+    }
+
+    .hero-cta {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 10px 20px;
+      border-radius: var(--radius);
+      font-size: 0.875rem;
+      font-weight: 600;
+      transition: opacity 0.2s, transform 0.15s;
+      cursor: pointer;
+    }
+    .btn:hover { opacity: 0.85; transform: translateY(-1px); text-decoration: none; }
+
+    .btn-primary { background: var(--green); color: #000; }
+    .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+
+    .hero-scroll {
+      margin-top: 4rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      color: var(--muted);
+      font-family: monospace;
+      font-size: 0.8rem;
+    }
+
+    .hero-scroll-line {
+      width: 40px;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* ── ABOUT ───────────────────────────────────────── */
+    #about .about-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+    }
+
+    .about-text {
+      color: #c9d1d9;
+      line-height: 1.8;
+    }
+
+    .about-text p + p { margin-top: 1rem; }
+
+    .about-stats {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem 1.5rem;
+    }
+
+    .stat-number {
+      font-size: 1.75rem;
+      font-weight: 800;
+      color: var(--green);
+      font-family: 'SF Mono', monospace;
+    }
+
+    .stat-label {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    /* ── SKILLS ──────────────────────────────────────── */
+    #skills .skills-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    .skill-group { }
+
+    .skill-group-label {
+      font-size: 0.75rem;
+      font-family: monospace;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 0.6rem;
+    }
+
+    .skill-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .tag {
+      font-family: 'SF Mono', monospace;
+      font-size: 0.8rem;
+      padding: 4px 12px;
+      border-radius: 4px;
+      border: 1px solid;
+    }
+
+    .tag-red    { color: #f85149; border-color: #3d1a1a; background: #1a0d0d; }
+    .tag-blue   { color: #58a6ff; border-color: #1a2a40; background: #0d1a28; }
+    .tag-green  { color: #3fb950; border-color: #1a3a20; background: #0d1a10; }
+    .tag-orange { color: #d29922; border-color: #3a2a0d; background: #1a1508; }
+    .tag-purple { color: #bc8cff; border-color: #2d1a40; background: #180d28; }
+    .tag-gray   { color: #8b949e; border-color: #21262d; background: #161b22; }
+
+    /* ── WRITE-UPS ───────────────────────────────────── */
+    #writeups .writeups-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+
+    .writeup-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem;
+      transition: border-color 0.2s, transform 0.15s;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .writeup-card:hover {
+      border-color: var(--green);
+      transform: translateY(-2px);
+    }
+
+    .writeup-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+
+    .writeup-type {
+      font-family: 'SF Mono', monospace;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .sev {
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-family: monospace;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .sev-critical { background: #3d1a1a; color: #f85149; }
+    .sev-high     { background: #3a2a0d; color: #d29922; }
+    .sev-medium   { background: #1a2a40; color: #58a6ff; }
+
+    .writeup-desc {
+      font-size: 0.875rem;
+      color: var(--muted);
+      flex: 1;
+    }
+
+    .writeup-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.78rem;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+      padding-top: 0.75rem;
+    }
+
+    .writeup-program {
+      font-family: monospace;
+    }
+
+    .writeup-link {
+      color: var(--cyan);
+      font-size: 0.78rem;
+    }
+
+    /* ── TOOLS ───────────────────────────────────────── */
+    #tools .tools-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+
+    .tool-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem;
+      transition: border-color 0.2s;
+    }
+
+    .tool-card:hover { border-color: var(--cyan); }
+
+    .tool-header {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .tool-icon { font-size: 1.1rem; }
+
+    .tool-name {
+      font-weight: 700;
+      font-family: 'SF Mono', monospace;
+      font-size: 0.9rem;
+      color: var(--cyan);
+    }
+
+    .tool-desc {
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-bottom: 0.75rem;
+      line-height: 1.5;
+    }
+
+    .tool-tags {
+      display: flex;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+    }
+
+    .tool-tag {
+      font-family: monospace;
+      font-size: 0.7rem;
+      color: var(--muted);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      padding: 2px 8px;
+      border-radius: 3px;
+    }
+
+    /* ── CONTACT ─────────────────────────────────────── */
+    #contact {
+      border-top: 1px solid var(--border);
+    }
+
+    .contact-inner {
+      text-align: center;
+      max-width: 500px;
+      margin: 0 auto;
+    }
+
+    .contact-inner h2 { margin-bottom: 0.75rem; }
+
+    .contact-sub {
+      color: var(--muted);
+      margin-bottom: 2rem;
+    }
+
+    .contact-links {
+      display: flex;
+      justify-content: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    /* ── DIVIDER ─────────────────────────────────────── */
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 0;
+    }
+
+    /* ── FOOTER ──────────────────────────────────────── */
+    footer {
+      text-align: center;
+      padding: 2rem;
+      color: var(--muted);
+      font-size: 0.8rem;
+      font-family: monospace;
+    }
+
+    /* ── RESPONSIVE ──────────────────────────────────── */
+    @media (max-width: 640px) {
+      #about .about-grid,
+      #writeups .writeups-grid,
+      #tools .tools-grid { grid-template-columns: 1fr; }
+
+      .nav-links { display: none; }
+      h2 { font-size: 1.4rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav>
+    <span class="nav-brand">~/aliffer</span>
+    <ul class="nav-links">
+      <li><a href="#about">sobre</a></li>
+      <li><a href="#skills">skills</a></li>
+      <li><a href="#writeups">write-ups</a></li>
+      <li><a href="#tools">tools</a></li>
+      <li><a href="#contact">contato</a></li>
+    </ul>
+  </nav>
+
+  <!-- HERO -->
+  <section id="hero">
+    <div class="container">
+      <div class="hero-inner">
+        <span class="hero-tag">$ whoami</span>
+        <h1 class="hero-name">Aliffer Luan<br><span>Medeiros Correa</span></h1>
+        <p class="hero-subtitle">
+          Offensive Security Analyst — pentest, bug bounty e pesquisa de vulnerabilidades.
+          Encontro falhas antes que os atacantes encontrem.
+        </p>
+        <div class="hero-cta">
+          <a href="#writeups" class="btn btn-primary">Ver Write-ups</a>
+          <a href="https://github.com/LuanMedeiross" target="_blank" class="btn btn-secondary">GitHub</a>
+          <a href="mailto:luannmedeirosss@gmail.com" class="btn btn-secondary">Contato</a>
+        </div>
+        <div class="hero-scroll">
+          <span class="hero-scroll-line"></span>
+          <span>scroll para explorar</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- ABOUT -->
+  <section id="about">
+    <div class="container">
+      <p class="section-label">// sobre</p>
+      <h2>Background</h2>
+      <div class="about-grid">
+        <div class="about-text">
+          <p>
+            Analista de Segurança Ofensiva com atuação em pentest de infraestrutura interna
+            na <strong>Tecnologia ADV</strong> e pesquisa independente de vulnerabilidades via
+            bug bounty. Background em desenvolvimento (Python, Java, Spring Boot) que
+            me dá visão técnica do código por trás das falhas que identifico.
+          </p>
+          <p>
+            Especializado em exploração manual — não apenas scanners automáticos.
+            Cada vulnerabilidade que reporto vem com PoC funcional, avaliação de impacto
+            real e plano de remediação acionável.
+          </p>
+          <p>
+            Cursando Ciências da Computação na UNIP. Base técnica em redes (TCP/IP, DNS,
+            HTTP/S, SMTP, SMB) e sistemas operacionais Linux e Windows.
+          </p>
+        </div>
+        <div class="about-stats">
+          <div class="stat-card">
+            <div class="stat-number">7+</div>
+            <div class="stat-label">meses em pentest ativo (Tecnologia ADV)</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-number">10+</div>
+            <div class="stat-label">vulnerabilidades reportadas via bug bounty</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-number">100%</div>
+            <div class="stat-label">PoC funcional em todos os relatórios</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- SKILLS -->
+  <section id="skills">
+    <div class="container">
+      <p class="section-label">// arsenal</p>
+      <h2>Skills & Ferramentas</h2>
+      <div class="skills-grid">
+
+        <div class="skill-group">
+          <div class="skill-group-label">Vulnerabilidades</div>
+          <div class="skill-tags">
+            <span class="tag tag-red">RCE</span>
+            <span class="tag tag-red">SSRF</span>
+            <span class="tag tag-red">SQL Injection</span>
+            <span class="tag tag-red">XSS stored/reflected</span>
+            <span class="tag tag-red">CSRF</span>
+            <span class="tag tag-red">IDOR</span>
+            <span class="tag tag-red">Auth Bypass</span>
+            <span class="tag tag-red">Command Injection</span>
+            <span class="tag tag-red">Path Traversal</span>
+            <span class="tag tag-red">Business Logic</span>
+          </div>
+        </div>
+
+        <div class="skill-group">
+          <div class="skill-group-label">Ferramentas</div>
+          <div class="skill-tags">
+            <span class="tag tag-orange">Burp Suite</span>
+            <span class="tag tag-orange">Metasploit</span>
+            <span class="tag tag-orange">Nmap</span>
+            <span class="tag tag-orange">Wireshark</span>
+            <span class="tag tag-orange">SQLmap</span>
+          </div>
+        </div>
+
+        <div class="skill-group">
+          <div class="skill-group-label">Frameworks & Metodologias</div>
+          <div class="skill-tags">
+            <span class="tag tag-blue">MITRE ATT&CK</span>
+            <span class="tag tag-blue">OWASP Top 10</span>
+            <span class="tag tag-blue">PTES</span>
+            <span class="tag tag-blue">NIST</span>
+          </div>
+        </div>
+
+        <div class="skill-group">
+          <div class="skill-group-label">Linguagens</div>
+          <div class="skill-tags">
+            <span class="tag tag-green">Python</span>
+            <span class="tag tag-green">Java</span>
+            <span class="tag tag-green">JavaScript</span>
+            <span class="tag tag-green">Bash</span>
+            <span class="tag tag-green">C / C++</span>
+          </div>
+        </div>
+
+        <div class="skill-group">
+          <div class="skill-group-label">Redes</div>
+          <div class="skill-tags">
+            <span class="tag tag-purple">TCP/IP</span>
+            <span class="tag tag-purple">DNS</span>
+            <span class="tag tag-purple">HTTP/S</span>
+            <span class="tag tag-purple">SMTP</span>
+            <span class="tag tag-purple">SMB</span>
+            <span class="tag tag-purple">SSH</span>
+            <span class="tag tag-purple">OSI Model</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- WRITE-UPS -->
+  <section id="writeups">
+    <div class="container">
+      <p class="section-label">// research</p>
+      <h2>Write-ups</h2>
+      <div class="writeups-grid">
+
+        <!-- CARD 1 — substituir com vuln real -->
+        <div class="writeup-card">
+          <div class="writeup-header">
+            <span class="writeup-type">Stored XSS</span>
+            <span class="sev sev-high">High</span>
+          </div>
+          <p class="writeup-desc">
+            Cross-site scripting persistente em campo de perfil de usuário.
+            Payload executado no contexto de outros usuários autenticados,
+            permitindo roubo de sessão e ações arbitrárias.
+          </p>
+          <div class="writeup-footer">
+            <span class="writeup-program mono">Bug Bounty — App E-commerce</span>
+            <a href="#" class="writeup-link">ler →</a>
+          </div>
+        </div>
+
+        <!-- CARD 2 -->
+        <div class="writeup-card">
+          <div class="writeup-header">
+            <span class="writeup-type">SQL Injection</span>
+            <span class="sev sev-critical">Critical</span>
+          </div>
+          <p class="writeup-desc">
+            Injeção SQL em endpoint de busca sem sanitização de input.
+            Exploração manual permitiu extração de dados sensíveis do banco
+            e enumeração da estrutura interna.
+          </p>
+          <div class="writeup-footer">
+            <span class="writeup-program mono">Bug Bounty — Plataforma SaaS</span>
+            <a href="#" class="writeup-link">ler →</a>
+          </div>
+        </div>
+
+        <!-- CARD 3 -->
+        <div class="writeup-card">
+          <div class="writeup-header">
+            <span class="writeup-type">CSRF</span>
+            <span class="sev sev-medium">Medium</span>
+          </div>
+          <p class="writeup-desc">
+            Cross-site request forgery em ação de troca de e-mail sem
+            validação de token. Possibilidade de sequestro de conta via
+            link malicioso enviado ao alvo.
+          </p>
+          <div class="writeup-footer">
+            <span class="writeup-program mono">Bug Bounty — App Web</span>
+            <a href="#" class="writeup-link">ler →</a>
+          </div>
+        </div>
+
+        <!-- CARD 4 -->
+        <div class="writeup-card">
+          <div class="writeup-header">
+            <span class="writeup-type">IDOR</span>
+            <span class="sev sev-high">High</span>
+          </div>
+          <p class="writeup-desc">
+            Insecure Direct Object Reference em endpoint de documentos.
+            Alteração de parâmetro de ID permitia acesso a arquivos de
+            outros usuários sem validação de autorização.
+          </p>
+          <div class="writeup-footer">
+            <span class="writeup-program mono">Bug Bounty — SaaS B2B</span>
+            <a href="#" class="writeup-link">ler →</a>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- TOOLS -->
+  <section id="tools">
+    <div class="container">
+      <p class="section-label">// ferramentas</p>
+      <h2>Tools</h2>
+      <div class="tools-grid">
+
+        <!-- TOOL 1 — substituir com ferramenta real -->
+        <div class="tool-card">
+          <div class="tool-header">
+            <span class="tool-icon">🔍</span>
+            <span class="tool-name">recon-auto</span>
+          </div>
+          <p class="tool-desc">
+            Script Python para automação de reconhecimento inicial: enumeração
+            de subdomínios, varredura de portas e fingerprinting de tecnologias.
+            Usado como fase de preparação em pentests.
+          </p>
+          <div class="tool-tags">
+            <span class="tool-tag">Python</span>
+            <span class="tool-tag">Nmap</span>
+            <span class="tool-tag">Recon</span>
+          </div>
+        </div>
+
+        <!-- TOOL 2 -->
+        <div class="tool-card">
+          <div class="tool-header">
+            <span class="tool-icon">⚡</span>
+            <span class="tool-name">vuln-reporter</span>
+          </div>
+          <p class="tool-desc">
+            Gerador de relatórios de vulnerabilidade em Markdown e PDF.
+            Template padronizado com CVSS, evidências, passos de reprodução
+            e recomendações de remediação.
+          </p>
+          <div class="tool-tags">
+            <span class="tool-tag">Python</span>
+            <span class="tool-tag">Markdown</span>
+            <span class="tool-tag">Reporting</span>
+          </div>
+        </div>
+
+      </div>
+      <p style="margin-top: 1.5rem; font-size: 0.85rem; color: var(--muted);">
+        Mais em <a href="https://github.com/LuanMedeiross">github.com/LuanMedeiross</a>
+      </p>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- CONTACT -->
+  <section id="contact">
+    <div class="container">
+      <div class="contact-inner">
+        <p class="section-label">// contato</p>
+        <h2>Vamos conversar</h2>
+        <p class="contact-sub">
+          Aberto a oportunidades em segurança ofensiva, pentest e bug bounty.
+        </p>
+        <div class="contact-links">
+          <a href="mailto:luannmedeirosss@gmail.com" class="btn btn-primary">
+            luannmedeirosss@gmail.com
+          </a>
+          <a href="https://linkedin.com/in/aliffer-correa-480462209" target="_blank" class="btn btn-secondary">
+            LinkedIn
+          </a>
+          <a href="https://github.com/LuanMedeiross" target="_blank" class="btn btn-secondary">
+            GitHub
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span>~/aliffer — offensive security</span>
+  </footer>
+
+</body>
+</html>
