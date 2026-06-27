@@ -46,18 +46,18 @@
   <script type="text/markdown" id="md">
 # Parte 5 · Conteúdo &amp; Escala
 
-*Extrair o dado de um HTML hostil — e aguentar fazer isso mil vezes sem ser derrubado.*
+*Extrair o dado de um HTML hostil, e aguentar fazer isso mil vezes sem ser derrubado.*
 
-Você passou pela porta e o servidor te entregou o HTML. Acabou o trabalho? Não — começou outro. Este capítulo tem duas metades. A primeira é **extrair o dado de um jeito que não quebre no próximo deploy do site**. A segunda é o que acontece quando você deixa de fazer isso uma vez e passa a fazer mil: a escala traz muros que uma requisição sozinha nunca mostra.
+Você passou pela porta e o servidor te entregou o HTML. Acabou o trabalho? Não, começou outro. Este capítulo tem duas metades. A primeira é extrair o dado de um jeito que não quebre no próximo deploy do site. A segunda é o que acontece quando você deixa de fazer isso uma vez e passa a fazer mil: a escala traz muros que uma requisição sozinha nunca mostra.
 
 ## Extrair: ancore no que é estável
 
-O erro mais comum na extração é prender o seletor em algo que o site troca a toda hora. O exemplo clássico são **ids e classes gerados dinamicamente** — `field_a8f3c2` hoje, `field_19bd0e` no próximo deploy. Fixar o seletor nesse id é garantir que o parser quebre, e quebre em silêncio.
+O erro mais comum na extração é prender o seletor em algo que o site troca a toda hora. O exemplo clássico são ids e classes gerados dinamicamente: `field_a8f3c2` hoje, `field_19bd0e` no próximo deploy. Fixar o seletor nesse id é garantir que o parser quebre, e quebre em silêncio.
 
-A regra é ancorar no que **não** muda. Em ordem de preferência: o *sufixo* estável do id, o **rótulo de texto** que fica ao lado do campo (esse quase nunca muda, porque um humano precisa lê-lo), ou um atributo semântico.
+A regra é ancorar no que não muda. Em ordem de preferência: o *sufixo* estável do id, o rótulo de texto que fica ao lado do campo (esse quase nunca muda, porque um humano precisa lê-lo), ou um atributo semântico.
 
 ```python
-# RUIM: preso a um id volátil — quebra no próximo deploy
+# RUIM: preso a um id volátil, quebra no próximo deploy
 soup.select_one("#form_a8f3c2_numero")
 
 # BOM (a): casa pelo sufixo estável do id
@@ -68,11 +68,11 @@ label = soup.find("label", string=re.compile("Número"))
 numero = label.find_next(class_="value").get_text(strip=True)
 ```
 
-**A pegadinha:** se o site randomiza até o rótulo visível (raro), nem isso te salva — aí você vai por heurística de **conteúdo**: identifica o campo pelo formato do valor, não pela posição.
+Se o site randomiza até o rótulo visível (raro), nem isso te salva: aí você vai por heurística de conteúdo, identificando o campo pelo formato do valor, não pela posição.
 
 ## Quando o dado vem por JavaScript
 
-Se o conteúdo é montado por script (você viu isso lá no reconhecimento), tem dois caminhos. O melhor é **achar a requisição que alimenta o DOM** e consumir ela direto — quase sempre é um JSON, que muda menos que HTML e dispensa o navegador. Só quando não dá é que você renderiza — e aí o detalhe que pega todo mundo: **espere o conteúdo aparecer, não a resposta da rede.** Um DOM ainda vazio é idêntico à página inicial; espere o elemento que você quer existir.
+Se o conteúdo é montado por script (você viu isso lá no reconhecimento), tem dois caminhos. O melhor é achar a requisição que alimenta o DOM e consumir ela direto: quase sempre é um JSON, que muda menos que HTML e dispensa o navegador. Só quando não dá é que você renderiza, e aí o detalhe que pega todo mundo é esperar o conteúdo aparecer, não a resposta da rede. Um DOM ainda vazio é idêntico à página inicial; espere o elemento que você quer existir.
 
 ```python
 # preferível: consumir a API que alimenta o DOM (JSON, mais estável que HTML)
@@ -85,7 +85,7 @@ page.wait_for_selector("[id$='tabela'] tr", timeout=6000)
 
 ## Parsing que dobra em vez de quebrar
 
-HTML do mundo real é irregular: campos faltam em alguns registros, tabelas vêm com colunas em ordem diferente, um item no meio do lote chega malformado. Um parser rígido explode no primeiro desvio e leva o lote inteiro junto. Um parser bom **degrada**: isola cada item, tolera ausência, e nunca confia em posição fixa.
+HTML do mundo real é irregular: campos faltam em alguns registros, tabelas vêm com colunas em ordem diferente, um item no meio do lote chega malformado. Um parser rígido explode no primeiro desvio e leva o lote inteiro junto. Um parser bom degrada: isola cada item, tolera ausência, e nunca confia em posição fixa.
 
 ```python
 resultados = []
@@ -100,13 +100,13 @@ col = {th.get_text(strip=True): i for i, th in enumerate(cabecalhos)}
 data = celulas[col["Data/Hora"]].get_text(strip=True)
 ```
 
-**A pegadinha:** tolerância demais tem um custo escondido — se *todos* os itens passarem a falhar, o `try/except` engole o sintoma e você não percebe que parou de extrair. Guarde essa tensão; ela é o tema do último capítulo.
+Tolerância demais tem um custo escondido: se *todos* os itens passarem a falhar, o `try/except` engole o sintoma e você não percebe que parou de extrair. Guarde essa tensão, ela ainda volta.
 
 ## Escala: a concorrência também é a sua sonda
 
-Agora a segunda metade. Fazer mil vezes não é só "repetir num loop" — a escala muda o comportamento do alvo. Servidores detectam padrões de requisição previsíveis, e muitos bloqueios (limite de taxa, WAF) **só aparecem sob carga**. Por isso a concorrência tem um papel duplo: ela acelera a coleta **e** revela o muro — de preferência no seu teste, não em produção.
+Agora a segunda metade. Fazer mil vezes não é só "repetir num loop": a escala muda o comportamento do alvo. Servidores detectam padrões de requisição previsíveis, e muitos bloqueios (limite de taxa, WAF) só aparecem sob carga. Por isso a concorrência tem um papel duplo: ela acelera a coleta e revela o muro, de preferência no seu teste, não em produção.
 
-Na prática, você divide a entrada em N trabalhadores, cada um com sua própria sessão isolada, e devolve os resultados por uma fila — sem travas no caminho dos dados, só nos contadores compartilhados.
+Na prática, você divide a entrada em N trabalhadores, cada um com sua própria sessão isolada, e devolve os resultados por uma fila, sem travas no caminho dos dados, só nos contadores compartilhados.
 
 ```python
 import threading, queue
@@ -122,11 +122,11 @@ def worker(sublote):
 # em vez de abrir N navegadores (que custa memória e te denuncia pelo volume).
 ```
 
-**A pegadinha:** concorrência demais vira um auto-ataque de negação de serviço — você derruba o alvo ou acelera o próprio bloqueio. Existe um ponto ótimo por site; ache empiricamente, começando alto num lote pequeno e baixando até a taxa de erro estabilizar.
+Concorrência demais vira um auto-ataque de negação de serviço: você derruba o alvo ou acelera o próprio bloqueio. Existe um ponto ótimo por site; ache empiricamente, começando alto num lote pequeno e baixando até a taxa de erro estabilizar.
 
 ## Falhar com elegância: retry, backoff e o disjuntor
 
-Sob escala, falhas deixam de ser exceção e viram rotina — e você precisa de três defesas. **Retry com espera crescente** (1s, 2s, 4s) para o que é transitório. **Rotação de IP** quando vêm muitos timeouts seguidos (sinal de bloqueio progressivo). E um **disjuntor**: se acontecem N falhas *consecutivas* sem nenhum sucesso no meio, o problema é sistêmico — o site caiu, mudou, ou te bloqueou de vez — e insistir só queima a fila (e, se há captcha, créditos reais). Melhor abortar e avisar uma vez.
+Sob escala, falhas deixam de ser exceção e viram rotina, e você precisa de três defesas. Retry com espera crescente (1s, 2s, 4s) para o que é transitório. Rotação de IP, trocando o proxy de saída, quando vêm muitos timeouts seguidos (sinal de bloqueio progressivo). E um disjuntor: se acontecem N falhas *consecutivas* sem nenhum sucesso no meio, o problema é sistêmico (o site caiu, mudou, ou te bloqueou de vez) e insistir só queima a fila, e, se há captcha, créditos reais. Melhor abortar e avisar uma vez.
 
 ```python
 import time
@@ -145,13 +145,34 @@ if falhas_consecutivas >= LIMITE:
     parar = True                        # aborta o lote em vez de queimar tudo
 ```
 
-**A pegadinha:** backoff cego contra um bloqueio definitivo só adia o inevitável. O disjuntor é justamente o reconhecimento de que, passado um limite, insistir é desperdício — a resposta certa é parar e investigar.
+Backoff cego contra um bloqueio definitivo só adia o inevitável. O disjuntor é justamente o reconhecimento de que, passado um limite, insistir é desperdício: a resposta certa é parar e investigar.
+
+Vale um olhar na segunda defesa, a rotação de IP, que tem duas formas e um pré-requisito. O pré-requisito é a reputação do endereço: sob escala, um IP de datacenter apanha rápido, enquanto um proxy residencial, com cara de acesso doméstico, aguenta muito mais antes de ser barrado. As duas formas são a rotação manual, em que você mantém uma lista de proxies e passa para o próximo quando detecta bloqueio, e o proxy rotativo, um único endereço que já entrega um IP de saída diferente a cada requisição, sem você gerenciar a troca. Nenhum é obrigatório: você recorre a eles só quando o próprio IP virou o gargalo.
+
+```python
+import itertools, requests
+
+# rotação MANUAL: uma lista de proxies residenciais, troca quando apanha
+POOL = ["http://user:senha@host1:porta", "http://user:senha@host2:porta"]
+proxies = itertools.cycle(POOL)
+
+def nova_sessao():
+    proxy = next(proxies)                 # próximo IP da fila
+    s = requests.Session()
+    s.proxies = {"http": proxy, "https": proxy}
+    return s
+
+# proxy ROTATIVO: a URL é fixa; o serviço troca o IP de saída a cada request
+GATEWAY = "http://user:senha@gateway:porta"
+s = requests.Session()
+s.proxies = {"http": GATEWAY, "https": GATEWAY}
+```
 
 ## O fecho
 
-Extrair bem é ancorar no estável e fazer o parser dobrar em vez de quebrar. Escalar bem é tratar a concorrência como sonda e ter um jeito de parar com elegância quando o muro aparece. Com isso, você tem um scraper que funciona — hoje.
+Extrair bem é ancorar no estável e fazer o parser dobrar em vez de quebrar. Escalar bem é tratar a concorrência como sonda e ter um jeito de parar com elegância quando o muro aparece. Com isso, você tem um scraper que funciona hoje.
 
-E aqui mora o último e mais traiçoeiro inimigo, aquele que nenhuma técnica deste capítulo pega sozinha: o dia em que o site muda e o seu scraper **continua "funcionando"** — sem erro, sem alarme, gravando lixo na sua base enquanto você dorme tranquilo. Como perceber isso antes de a base contaminar é o assunto do último capítulo.
+E aqui mora o inimigo mais traiçoeiro, aquele que nenhuma técnica vista até agora pega sozinha: o dia em que o site muda e o seu scraper continua "funcionando", sem erro, sem alarme, gravando lixo na sua base enquanto você dorme tranquilo. Perceber isso antes de a base inteira contaminar é um problema por si só.
   </script>
   <script src="render.js"></script>
 </body>

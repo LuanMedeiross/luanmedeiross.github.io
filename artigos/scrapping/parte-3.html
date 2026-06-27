@@ -48,15 +48,15 @@
 
 *O muro antes do conteúdo: fazer o servidor te aceitar como um cliente legítimo.*
 
-Lá no Capítulo 1, a pegadinha do cliente HTTP foi: às vezes ele "não passa", e não é por falta de navegador — é pela assinatura. Este capítulo desce nessa camada. Antes de te entregar uma única linha de HTML, o servidor te avalia: como você abriu a conexão, o que seus cabeçalhos dizem, se você trouxe os cookies certos, se você seguiu o caminho. Passar por essas portas é o assunto aqui — e a lição que costura tudo é uma só: **o que te barra não é uma peça isolada, é a incoerência entre elas.**
+Antes de entregar uma única linha de HTML, o servidor te avalia: como você abriu a conexão, o que seus cabeçalhos dizem, se você trouxe os cookies certos, se você seguiu o caminho. Passar por cada uma dessas portas é o assunto deste capítulo, e a lição que costura tudo é uma só: o que te derruba raramente é uma peça sozinha, e sim a incoerência entre elas.
 
 ## O porteiro invisível: a assinatura de TLS
 
-Esse é o muro que mais gente bate sem entender. Você manda uma requisição, recebe um `403`, e conclui "preciso de navegador". Mas então abre o site no navegador, na mesma rede, e funciona. Mesma URL, headers parecidos — o que muda?
+Esse é o muro que mais gente bate sem entender. Você manda uma requisição, recebe um `403`, e conclui que precisa de navegador. Mas então abre o site no navegador, na mesma rede, e funciona. Mesma URL, cabeçalhos parecidos. O que muda?
 
-O que muda acontece **antes** do HTTP. Para falar HTTPS, cliente e servidor primeiro negociam a conexão criptografada (o *handshake* de TLS), e essa negociação tem uma impressão digital: a combinação de versões, cifras e extensões que o seu cliente oferece (é o que chamam de JA3/JA4). Cada biblioteca tem uma impressão distinta e conhecida — e alguns sistemas de defesa barram tudo que não tem cara de navegador real **antes mesmo de olhar o que você pediu.**
+O que muda acontece antes do HTTP. Para falar HTTPS, cliente e servidor primeiro negociam a conexão criptografada, o *handshake* de TLS, e essa negociação tem uma impressão digital: a combinação de versões, cifras e extensões que o seu cliente oferece, o que chamam de JA3/JA4. Cada biblioteca tem uma impressão própria e conhecida, e alguns sistemas de defesa barram tudo que não tem cara de navegador real antes mesmo de olhar o que você pediu.
 
-A saída é usar um cliente HTTP que **imita o handshake de um navegador**:
+A saída é usar um cliente HTTP que imita o handshake de um navegador.
 
 ```python
 # um cliente HTTP que assume o fingerprint TLS de um navegador real
@@ -66,13 +66,11 @@ r = requests.get("https://exemplo.com", impersonate="chrome")
 print(r.status_code)   # passa onde o cliente padrão tomava 403
 ```
 
-**A pegadinha:** isso vence a checagem do handshake — não um desafio que exige *executar* JavaScript. Se, depois de passar no TLS, ainda vem uma página de "verificando seu navegador", aí o problema é outro e o degrau é o navegador.
+Isso vence a checagem do handshake, mas não um desafio que exige executar JavaScript. Se, depois de passar no TLS, ainda vem uma página de "verificando seu navegador", o problema é outro e você vai precisar do navegador.
 
 ## A identidade que você declara: os cabeçalhos
 
-Passado o handshake, vêm os cabeçalhos HTTP — e o servidor lê todos. Falta de `User-Agent`, um `User-Agent` genérico, ou uma ordem de cabeçalhos que não bate com a do navegador que você diz ser: qualquer um desses te entrega. Pior ainda é a incoerência — dizer que é um navegador no cabeçalho e ter o handshake de outra coisa.
-
-A regra é simples: conte **uma história consistente**. Cabeçalhos plausíveis e coerentes com o cliente que você está imitando.
+Passado o handshake, vêm os cabeçalhos HTTP, e o servidor lê todos. Falta de `User-Agent`, um `User-Agent` genérico, ou uma ordem de cabeçalhos que não bate com a do navegador que você diz ser: qualquer um desses te entrega. Pior é a incoerência, tipo dizer que é um navegador no cabeçalho e ter o handshake de outra coisa. A regra é contar uma história consistente, com cabeçalhos coerentes com o cliente que você está imitando.
 
 ```python
 headers = {
@@ -84,13 +82,11 @@ headers = {
 r = requests.get(url, headers=headers, impersonate="chrome")
 ```
 
-**A pegadinha:** centralize esses valores num lugar só. `User-Agent` copiado em dez arquivos vira dez versões diferentes com o tempo — e basta um destoar pra você ter um bug que só aparece "às vezes".
+Um detalhe que poupa dor de cabeça: centralize esses valores num lugar só. `User-Agent` copiado em dez arquivos vira dez versões diferentes com o tempo, e basta uma destoar pra você ter um bug que só aparece "às vezes".
 
 ## O caminho e o estado: cookies, tokens e a ordem das coisas
 
-Muitos sites não aceitam um POST direto no endereço do resultado. Eles exigem que você **tenha passado pelo caminho**: um cookie que só é setado na página inicial, um token de estado escondido no HTML do formulário, um identificador de sessão, um `Referer` que faça sentido. Pular etapas devolve um formulário vazio ou um erro educado — e você perde horas achando que o problema é outro.
-
-A solução é reproduzir o caminho de um humano: primeiro o GET da página inicial (que te dá os cookies e o token embutido), depois o POST reusando tudo.
+Muitos sites não aceitam um POST direto no endereço do resultado. Eles exigem que você tenha passado pelo caminho: um cookie que só é setado na página inicial, um token de estado escondido no HTML do formulário, um identificador de sessão, um `Referer` que faça sentido. Pular etapas devolve um formulário vazio ou um erro educado, e você perde horas achando que o problema é outro. A solução é reproduzir o caminho de um humano: primeiro o GET da página inicial, que te dá os cookies e o token embutido, depois o POST reusando tudo.
 
 ```python
 s = requests.Session(impersonate="chrome")
@@ -105,13 +101,11 @@ r = s.post("https://exemplo.com/busca",
            headers={"Referer": "https://exemplo.com/busca"})
 ```
 
-**A pegadinha:** se o token não está embutido no HTML, mas é *gerado por JavaScript* no navegador, o GET não te entrega ele pronto — e aí você cai no caso de precisar executar JS.
+Se o token não está embutido no HTML, mas é gerado por JavaScript no navegador, o GET não te entrega ele pronto, e aí você cai no caso de precisar executar JS.
 
 ## Quando o navegador é inevitável: o disfarce
 
-Às vezes não tem escapatória e você vai pro navegador automatizado. Só que ele também tem marcas que o entregam: uma propriedade que anuncia "estou sob automação", uma lista de plugins vazia, a ausência de objetos que um navegador comum sempre tem. Scripts anti-bot leem exatamente isso.
-
-A resposta é injetar, **antes de a página carregar seus scripts**, um trecho que sobrescreve essas marcas pra você parecer um navegador comum.
+Às vezes não tem escapatória e você vai pro navegador automatizado. Só que ele também tem marcas que o entregam: uma propriedade que anuncia "estou sob automação", uma lista de plugins vazia, a ausência de objetos que um navegador comum sempre tem. Scripts anti-bot leem exatamente isso. A resposta é injetar, antes de a página carregar seus scripts, um trecho que sobrescreve essas marcas pra você parecer um navegador comum.
 
 ```python
 # injeta o disfarce ANTES de a página rodar o JavaScript dela
@@ -123,13 +117,13 @@ page.add_init_script("""
 page.goto("https://exemplo.com")
 ```
 
-**A pegadinha (e essa é contraintuitiva):** alguns desafios **procuram justamente o disfarce** — eles detectam quem está tentando se esconder. Já vi um caso em que *desligar* o disfarce passava e ligá-lo bloqueava. Trate isso como uma chave que você liga e desliga por alvo, testando — nunca como um "deixa sempre ligado".
+E aqui mora uma armadilha contraintuitiva: alguns desafios procuram justamente o disfarce, detectando quem está tentando se esconder. Já vi um caso em que desligar o disfarce passava e ligar bloqueava. Trate isso como uma chave que você liga e desliga por alvo, testando, nunca como um "deixa sempre ligado".
 
 ## A história precisa fechar
 
-Repare no fio que costura o capítulo inteiro: o servidor raramente te barra por **uma** coisa. Ele te barra pela **incoerência**. Handshake de navegador, cabeçalhos de navegador, os cookies do fluxo, comportamento de navegador — tudo isso conta a mesma história. Quando uma peça destoa do resto, o porteiro percebe. Passar por essa camada é, no fundo, contar uma história consistente do primeiro handshake até o clique no botão de buscar.
+Repare no fio que costura o capítulo: o servidor raramente te barra por uma coisa só. Ele te barra pela incoerência. Handshake de navegador, cabeçalhos de navegador, os cookies do fluxo, o IP de onde você sai, o comportamento na página: tudo isso conta a mesma história, e quando uma peça destoa, o porteiro percebe. O IP, aliás, carrega reputação própria: um endereço de datacenter já chega marcado como provável robô, um residencial passa por acesso comum. Quando é o seu IP que destoa, seja por estar marcado, seja por sair de um país que não bate com o idioma que você declara, a saída é roteá-lo por um proxy, que faz a requisição sair de outro endereço. Não é item obrigatório: você recorre a ele só quando o IP é o que está te entregando. Passar por essa camada é, no fundo, contar uma história consistente do primeiro handshake até o clique no botão de buscar.
 
-Mas existe uma porta que história coerente nenhuma abre sozinha — ela te para na cara e pede que você prove, ali, que é humano. É o captcha, e é o próximo capítulo.
+Tem uma porta, porém, que história coerente nenhuma abre sozinha: o captcha. Ela te para na cara e pede que você prove, ali, que é humano.
   </script>
   <script src="render.js"></script>
 </body>
