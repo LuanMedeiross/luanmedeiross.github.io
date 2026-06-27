@@ -546,6 +546,76 @@ page.goto("https://exemplo.com")
 Repare no fio que costura o capítulo inteiro: o servidor raramente te barra por **uma** coisa. Ele te barra pela **incoerência**. Handshake de navegador, cabeçalhos de navegador, os cookies do fluxo, comportamento de navegador — tudo isso conta a mesma história. Quando uma peça destoa do resto, o porteiro percebe. Passar por essa camada é, no fundo, contar uma história consistente do primeiro handshake até o clique no botão de buscar.
 
 Mas existe uma porta que história coerente nenhuma abre sozinha — ela te para na cara e pede que você prove, ali, que é humano. É o captcha, e é o próximo capítulo.
+
+## Parte 4 · Captcha
+
+*A porta que nenhuma coerência abre sozinha — e como atravessá-la sem perder dinheiro à toa.*
+
+Captcha assusta quem está começando, mas o segredo é desarmar a expectativa logo: na prática, você quase nunca "resolve" um captcha sozinho. Você **terceiriza** a resolução para um serviço especializado, recebe um token válido de volta, e injeta esse token onde o site espera. O trabalho de verdade não é resolver — é **detectar qual captcha é**, **descobrir como entregá-lo certo ao serviço**, e **saber a hora de não insistir.**
+
+### Antes de tudo: não resolva o que dá pra evitar
+
+Resolver captcha custa dinheiro (o serviço cobra por resolução) e tempo (segundos por desafio). Então a primeira pergunta nunca é "como resolvo?", e sim "**preciso mesmo passar por aqui?**". Existe uma rota da API que não exige o captcha? Um fluxo alternativo no site? Uma página de resultado que não o dispara? Procure o desvio antes de pagar o pedágio. O solver é a última coisa que você adiciona, não a primeira.
+
+### Detectar qual captcha é — e se está mesmo ligado
+
+Cada tipo de captcha fala uma língua diferente, então o primeiro passo é identificar com qual você está lidando. A assinatura de cada um vive no HTML:
+
+```python
+soup = BeautifulSoup(html, "html.parser")
+
+if soup.select_one("[data-sitekey]"):
+    tipo = "widget_com_sitekey"      # injeta um token num campo escondido
+elif "g-recaptcha-response" in html:
+    tipo = "checkbox_ou_invisivel"
+elif "data:image" in html:
+    tipo = "imagem"                  # uma imagem embutida pra ler
+```
+
+**A armadilha — e essa derruba muita gente:** o captcha estar **carregado** no HTML não significa que ele está **ativo**. Já vi um alvo onde o reconhecimento acusava um captcha que estava desligado — havia um `if (false)` em volta da função que deveria dispará-lo, e o captcha de verdade era outro. Antes de gastar uma resolução, confirme qual desafio **dispara de fato**: olhe o `onclick` do botão de buscar e os `if(true)/if(false)` que cercam a função do captcha. Resolver o captcha errado é dinheiro no lixo.
+
+### Resolver: o fluxo genérico
+
+O padrão é sempre o mesmo, qualquer que seja o tipo: você manda ao serviço os parâmetros do desafio (a sitekey e a URL, ou os bytes da imagem), espera o token, e injeta esse token no campo escondido ou no parâmetro que o site espera.
+
+```python
+from twocaptcha import TwoCaptcha
+solver = TwoCaptcha("SUA_API_KEY")
+
+# widget com sitekey: manda sitekey + url, recebe o token pronto
+token = solver.turnstile(sitekey=sitekey, url=url)["code"]
+
+# captcha de imagem: manda os bytes, recebe o texto lido
+texto = solver.normal("captcha.png")["code"]
+
+# o token/texto entra no POST como se você tivesse resolvido na tela
+```
+
+### A regra de ouro: não declare "irresolvível" cedo demais
+
+Essa é a lição que mais economiza tempo — e dinheiro. Um dia fiquei num captcha que voltava erro atrás de erro; tudo indicava que era impossível resolver. Quase abandonei o alvo inteiro. A causa não era o captcha: era **um parâmetro que faltava**. O site carregava um script não-padrão, e o serviço de resolução precisava saber disso para resolver o desafio certo. No instante em que passei o parâmetro correto, resolveu de primeira.
+
+A lição: **muito captcha "irresolvível" é só um parâmetro faltando.** Antes de desistir — leia a documentação do serviço para aquele tipo, confirme se a biblioteca tem o método, procure problemas já relatados por outras pessoas (o mesmo desafio provavelmente já travou alguém), e esgote os parâmetros opcionais. Testar costuma ser de graça quando o resultado é "não consegui resolver", então teste à vontade antes de cravar que é impossível.
+
+### Leia a sitekey, não a fixe
+
+A `sitekey` do captcha pode mudar entre deploys do site. Se você fixou ela no código, na próxima rotação você passa a pedir a resolução do captcha errado — e falha em silêncio. Extraia a sitekey do próprio HTML, em tempo de execução, sempre:
+
+```python
+sitekey = BeautifulSoup(html, "html.parser").select_one("[data-sitekey]")["data-sitekey"]
+```
+
+### Quando o captcha vence mesmo
+
+Existe um tipo que avalia o seu **comportamento** e te dá uma nota silenciosa, sem desafio visível. Esse frequentemente reprova um navegador sem tela, mesmo com o token resolvido — porque o problema não é o token, é você não parecer humano o suficiente. Duas saídas: subir para um navegador com tela (mais sinais de comportamento real) ou, de novo, voltar e procurar a rota que não passa pelo captcha.
+
+E uma verdade que vale repetir: **resolver o captcha não conserta uma sessão que o servidor já achou suspeita.** Se você está apanhando de captcha porque a sua conexão parece de robô, o token resolvido só adia o bloqueio — o problema está uma camada antes, lá no capítulo anterior. Trate a causa, não o sintoma.
+
+### O resumo
+
+O captcha parece o muro mais alto e costuma ser o mais mecânico: identifique o tipo, confirme que ele está ligado, entregue os parâmetros certos a um serviço, injete o token. O que separa quem passa de quem desiste não é técnica avançada — é não cravar "impossível" sem antes pesquisar e esgotar os parâmetros.
+
+Passada essa porta, o servidor finalmente te entrega o HTML. Só que agora começa um problema diferente: **extrair o dado de um jeito que não quebre amanhã** — e descobrir o que acontece quando você faz isso não uma, mas mil vezes. É o próximo capítulo.
   </script>
 
   <!-- ───────────────── RENDERIZAÇÃO + NAVEGAÇÃO POR CAPÍTULO ───────────────── -->
@@ -553,50 +623,46 @@ Mas existe uma porta que história coerente nenhuma abre sozinha — ela te para
     (function () {
       var src = document.getElementById('article-source').textContent;
       var content = document.getElementById('content');
-      content.innerHTML = DOMPurify.sanitize(marked.parse(src));
-
-      // realce de sintaxe
-      content.querySelectorAll('pre code').forEach(function (el) {
-        try { hljs.highlightElement(el); } catch (e) {}
-      });
-
       function slug(t) {
         return ((t || '').toLowerCase()
           .normalize('NFD').replace(/[̀-ͯ]/g, '')
           .replace(/[^a-z0-9\s-]/g, '').trim()
           .replace(/\s+/g, '-')) || 'sec';
       }
-
-      // ---- fatia o conteúdo em capítulos (fronteira = H2 que começa com "Parte") ----
-      function isChapter(n) {
-        return n.tagName === 'H2' && /^parte\b/i.test((n.textContent || '').trim());
+      function md(s) { return DOMPurify.sanitize(marked.parse(s)); }
+      function hl(root) {
+        root.querySelectorAll('pre code').forEach(function (el) {
+          try { hljs.highlightElement(el); } catch (e) {}
+        });
       }
+
+      // ---- divide o MARKDOWN BRUTO nos marcadores "## Parte" (robusto, não depende do DOM) ----
+      var blocks = src.split(/\n(?=#{2}\s+Parte\b)/);
+      var headerMd = '', chapMds = [];
+      blocks.forEach(function (b) {
+        if (/^\s*#{2}\s+Parte\b/.test(b)) chapMds.push(b);
+        else if (!chapMds.length) headerMd += (headerMd ? '\n' : '') + b;
+        else chapMds[chapMds.length - 1] += '\n' + b;
+      });
+
+      content.innerHTML = '';
       var header = document.createElement('div');
       header.className = 'article-header';
-      var chapters = [];
-      var cur = null;
-      Array.prototype.slice.call(content.children).forEach(function (el) {
-        if (isChapter(el)) {
-          cur = document.createElement('section');
-          cur.className = 'chapter';
-          chapters.push(cur);
-          cur.appendChild(el);
-        } else if (cur) {
-          cur.appendChild(el);
-        } else {
-          header.appendChild(el);
-        }
-      });
-      content.textContent = '';
+      header.innerHTML = md(headerMd);
+      hl(header);
       content.appendChild(header);
-      chapters.forEach(function (s) { content.appendChild(s); });
 
       var h1 = header.querySelector('h1');
       if (h1) document.title = h1.textContent;
 
-      // ---- metadados por capítulo (ids + sub-tópicos) ----
-      var data = chapters.map(function (sec, i) {
+      // ---- renderiza cada capítulo na sua própria seção ----
+      var data = chapMds.map(function (cmd, i) {
+        var sec = document.createElement('section');
+        sec.className = 'chapter';
         sec.id = 'cap-' + i;
+        sec.innerHTML = md(cmd);
+        hl(sec);
+        content.appendChild(sec);
         var titleEl = sec.querySelector('h2');
         var title = titleEl ? titleEl.textContent.trim() : ('Capítulo ' + (i + 1));
         var subs = Array.prototype.slice.call(sec.querySelectorAll('h2, h3'))
