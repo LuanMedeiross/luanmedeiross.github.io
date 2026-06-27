@@ -69,7 +69,7 @@ elif "data:image" in html:
     tipo = "imagem"                  # uma imagem embutida pra ler
 ```
 
-Aí vem o tropeço que derruba muita gente: o captcha estar carregado no HTML não significa que ele está ativo. Já vi um alvo onde o reconhecimento acusava um captcha que estava desligado. Havia um `if (false)` em volta da função que deveria dispará-lo, e o captcha de verdade era outro. Antes de gastar uma resolução, confirme qual desafio dispara de fato: olhe o `onclick` do botão de buscar e os `if(true)/if(false)` que cercam a função do captcha. Resolver o captcha errado é dinheiro no lixo.
+Aí vem o tropeço que derruba muita gente: o captcha estar carregado no HTML não significa que ele está ativo. Alguns sites implementam um captcha mas o deixam desativado; outros trocaram de captcha e nunca removeram a implementação antiga, que segue no HTML sem disparar. Antes de gastar uma resolução, confirme qual desafio dispara de fato: olhe o que o botão de buscar realmente chama no `onclick` e qual função de captcha é de fato acionada. Resolver o captcha errado é dinheiro no lixo.
 
 ## Resolver: o fluxo genérico
 
@@ -104,7 +104,7 @@ Vale só pros simples. Captcha de widget, "selecione as imagens com…", ou o qu
 
 ## A regra de ouro: não declare "irresolvível" cedo demais
 
-Essa é a lição que mais economiza tempo e dinheiro. Um dia fiquei num captcha que voltava erro atrás de erro; tudo indicava que era impossível resolver. Quase abandonei o alvo inteiro. A causa não era o captcha: era um parâmetro que faltava. O site carregava um script não-padrão, e o serviço de resolução precisava saber disso para resolver o desafio certo. No instante em que passei o parâmetro correto, resolveu de primeira.
+Essa é a lição que mais economiza tempo e dinheiro. Um captcha pode voltar erro atrás de erro e parecer impossível quando a causa não é o desafio, e sim um parâmetro que falta na chamada ao serviço. É comum em sites que carregam o captcha por um script não-padrão ou em domínio próprio: o serviço de resolução precisa ser avisado disso para resolver o desafio certo. Com o parâmetro correto, o mesmo captcha "irresolvível" resolve de primeira.
 
 A lição: muito captcha "irresolvível" é só um parâmetro faltando. Antes de desistir, leia a documentação do serviço para aquele tipo, confirme se a biblioteca tem o método, procure problemas já relatados por outras pessoas (o mesmo desafio provavelmente já travou alguém), e esgote os parâmetros opcionais. Testar costuma ser de graça quando o resultado é "não consegui resolver", então teste à vontade antes de cravar que é impossível.
 
@@ -132,15 +132,7 @@ token = solver.turnstile(sitekey=sitekey, url=url,
 
 Existe uma classe de sites realmente blindados onde o problema não é (só) o captcha. A página calcula um score de confiança do seu navegador e do seu comportamento e, mesmo com o captcha resolvido, devolve `false` e te bloqueia. Mudar cabeçalhos, locale, stealth, nada move o ponteiro, porque o muro não é o desafio: é "isto não parece uma pessoa de verdade num navegador de verdade".
 
-Já vi essa situação de perto, e vale contar inteira porque mostra até onde a coisa vai. A gente não conseguia passar a barreira de jeito nenhum, nem com proxy, nem com o IP residencial local. Os suspeitos eram dois: o captcha (que, vindo de um IP de datacenter, já chega marcado com uma flag) e a própria confiabilidade da página, que avaliava o navegador. Provavelmente os dois ao mesmo tempo.
-
-No começo parecia que não dava pra passar aquele captcha com aquele IP, e a missão foi abortada. Até aparecer uma extensão de navegador, a do NopeCHA, que resolve o captcha por interação real, dentro do próprio navegador. Isso abriu a chance de tirar a prova: o bloqueio era o captcha, ou era a página?
-
-Com a extensão, o captcha passou a ser resolvido. E mesmo assim a página continuava identificando acesso automatizado. Pronto, pergunta respondida: o que sobrava era a confiabilidade. A barra estava alta o suficiente pra barrar um navegador dirigido por automação, com o captcha já resolvido. Tentamos mudar cabeçalhos, não bastou. Locale, stealth, nada. Precisava de um pulo maior: acessar a página como um usuário acessa de verdade.
-
-A virada foi essa. Primeiro, instalar a extensão no navegador do container e configurar a chave; só então abrir a página. Nela, deixar a extensão resolver o captcha primeiro, e não tocar no formulário ao mesmo tempo, porque isso rouba o foco do teste do captcha e estraga tudo. Resolvido o captcha, aí sim preencher e enviar o formulário, tudo com o mouse se movendo de verdade: uma biblioteca movia o ponteiro até a posição dos botões na tela e clicava como um humano. Era frágil (dependia da posição dos elementos na tela), mas funcionou. E, dali em diante, era só raspar.
-
-A lição: existe um teto em que disfarçar a conexão não basta. O site quer ver comportamento humano, e a única forma de provar é se comportar como humano de fato: um navegador real, a interação acontecendo de verdade (o mouse se movendo, cliques reais) e o captcha resolvido por uma interação genuína, não por um token injetado de fora. É caro, é frágil, é o último recurso entre os últimos recursos. Mas quando a barra é essa, é o que sobra.
+Contra esse tipo de barreira, injetar um token resolvido de fora não soma confiança nenhuma. O que ajuda é resolver o captcha por interação real dentro do próprio navegador, com uma extensão como a do NopeCHA: a resolução acontece como a de um usuário comum e conta pontos no score, em vez de parecer um token vindo de fora. Some a isso comportamento de gente de verdade, o mouse se movendo até os botões e cliques reais, e o score sobe o suficiente para passar. É caro e frágil, e só compensa quando a barra é essa: o último recurso entre os últimos recursos.
 
 E continua valendo a regra que costura este capítulo inteiro: resolver o captcha não conserta uma sessão que o servidor já achou suspeita. Se você apanha de captcha porque a sua conexão parece de robô, o token só adia o bloqueio, a causa está uma camada antes. Trate a causa, não o sintoma.
 

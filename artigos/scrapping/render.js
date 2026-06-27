@@ -56,6 +56,14 @@
     } catch (e) {}
   }
 
+  // deep-link entre páginas: rola até a âncora depois que os ids foram montados
+  try {
+    if (location.hash) {
+      var tgt = document.getElementById(decodeURIComponent(location.hash.slice(1)));
+      if (tgt) tgt.scrollIntoView();
+    }
+  } catch (e) {}
+
   var h1 = content.querySelector('h1');
   if (h1) document.title = h1.textContent + ' — scraping';
 })();
