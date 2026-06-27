@@ -79,6 +79,44 @@ Confirme antes de codar: botão direito na requisição, "Copy as cURL", e rode 
 
 Você não escolhe a ferramenta, o alvo escolhe por você, e o DevTools conta a escolha. O navegador é mais lento, mais frágil e mais fácil de detectar que um cliente HTTP, então ele entra só quando os outros dois casos não dão conta.
 
+## Metodologia
+
+Todo scraper percorre o mesmo fluxo, e cada etapa alimenta a seguinte: a saída de uma é a entrada da próxima.
+
+```text
+alvo
+ │
+ ├─ 1. reconhecimento  →  DevTools (Network/XHR); Copy as cURL pra provar
+ │       └─ pergunta-mãe: dado pronto, ou montado por JavaScript?
+ │            ├─ JSON numa XHR ......... cliente HTTP (melhor caso)
+ │            ├─ no HTML do documento .. cliente HTTP + parsing
+ │            └─ só no DOM por JS ...... navegador automatizado
+ │
+ ├─ 2. abordagem  →  o mais barato que resolve; navegador é o último recurso
+ │       └─ captcha? imagem/token → serviço externo ou OCR local
+ │                   comportamento/página inteira → navegador
+ │
+ ├─ 3. reproduzir  →  faça 1 resultado sair na mão, antes do loop
+ │       └─ a porta, se o servidor barrar: fingerprint de TLS, coerência de
+ │          header, cookies + token + ordem do fluxo, proxy se o IP destoar
+ │
+ ├─ 4. extração  →  veja o HTML real; ancore no estável, nunca no volátil
+ │       └─ parser que dobra: isola item, tolera ausência, ignora posição
+ │
+ ├─ 5. escala  →  concorrência como sonda; o bloqueio aparece sob carga
+ │       ├─ retry com espera crescente (1s, 2s, 4s)
+ │       ├─ rotação de IP: manual (lista) ou proxy rotativo
+ │       └─ disjuntor: N falhas seguidas → aborta o lote
+ │
+ └─ 6. manutenção  →  assuma que vai quebrar calado; construa o alarme
+         ├─ assinatura versionada (1 GET) → diff estrutural
+         ├─ gabarito comportamental: presença + forma do valor
+         ├─ replay offline do parser (HTML salvo, sem rede)
+         └─ persistência idempotente + retomada
+```
+
+Esse é o mapa. O resto desta parte abre cada etapa dele, uma a uma.
+
 ## As seis fases
 
 Reconhecer e decidir a abordagem é o coração das duas primeiras fases. O caminho completo, do primeiro contato até a coleta em produção, tem seis.
