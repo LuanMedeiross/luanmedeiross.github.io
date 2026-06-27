@@ -83,6 +83,8 @@ O jeito como você escreve o seletor decide se o parser sobrevive ao próximo de
 
 Um navegador de verdade, dirigido por código. Ele carrega a página, executa o JavaScript, clica, preenche e espera o conteúdo aparecer, tudo que o cliente HTTP não faz. O preço é alto: ordens de magnitude mais lento e mais pesado, e mais fácil de detectar. Por isso é o último recurso, e entra só quando o conteúdo é montado por JavaScript, quando há um desafio de página inteira, ou quando um captcha invisível reprova um ambiente sem tela.
 
+Esse navegador roda em dois modos. No headless ele faz tudo (carrega a página, executa o JavaScript, monta o DOM) sem abrir uma janela visível, o que o deixa bem mais leve e rápido. É o modo certo para o caso comum: um site que só monta o conteúdo por JavaScript, mas não inspeciona quem está acessando. Quando o alvo passa a checar o ambiente (procurar marcas de automação, exigir comportamento humano, calcular um score de confiança), o headless costuma ser detectado, e aí você sobe para um navegador visível, com janela, rodando como o de uma pessoa. Comece sempre pelo headless; só troque pelo visível quando o site provar que checa.
+
 ```python
 from playwright.sync_api import sync_playwright
 

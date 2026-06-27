@@ -72,7 +72,7 @@ Se o site randomiza até o rótulo visível (raro), nem isso te salva: aí você
 
 ## Quando o dado vem por JavaScript
 
-Se o conteúdo é montado por script (você viu isso lá no reconhecimento), tem dois caminhos. O melhor é achar a requisição que alimenta o DOM e consumir ela direto: quase sempre é um JSON, que muda menos que HTML e dispensa o navegador. Só quando não dá é que você renderiza, e aí o detalhe que pega todo mundo é esperar o conteúdo aparecer, não a resposta da rede. Um DOM ainda vazio é idêntico à página inicial; espere o elemento que você quer existir.
+Se o conteúdo é montado por script (você viu isso lá no reconhecimento), tem dois caminhos. O melhor é achar a requisição que alimenta o DOM e consumir ela direto: quase sempre é um JSON, que muda menos que HTML e dispensa o navegador. Só quando não dá é que você renderiza, e se o site só monta o conteúdo por JavaScript sem checar quem acessa, o navegador headless dá conta e é bem mais rápido que abrir uma janela visível. Aí o detalhe que pega todo mundo é esperar o conteúdo aparecer, não a resposta da rede. Um DOM ainda vazio é idêntico à página inicial; espere o elemento que você quer existir.
 
 ```python
 # preferível: consumir a API que alimenta o DOM (JSON, mais estável que HTML)

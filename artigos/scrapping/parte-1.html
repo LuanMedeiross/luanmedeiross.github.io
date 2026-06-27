@@ -87,7 +87,7 @@ Todo scraper percorre o mesmo fluxo, e cada etapa alimenta a seguinte: a saída 
 alvo
  │
  ├─ 1. reconhecimento  →  DevTools (Network/XHR); Copy as cURL pra provar
- │       └─ pergunta-mãe: dado pronto, ou montado por JavaScript?
+ │       └─ pergunta principal: dado pronto, ou montado por JavaScript?
  │            ├─ JSON numa XHR ......... cliente HTTP (melhor caso)
  │            ├─ no HTML do documento .. cliente HTTP + parsing
  │            └─ só no DOM por JS ...... navegador automatizado
@@ -123,13 +123,13 @@ Reconhecer e decidir a abordagem é o coração das duas primeiras fases. O cami
 
 ### Fase 1 · Reconhecimento
 
-Antes de escolher ferramenta, mapeie o alvo. Além da pergunta-mãe (API ou JavaScript), descubra a entrada e a saída que você quer, se há login, sessão ou token de estado, se há captcha e de que tipo, se há paginação, e o volume esperado. Anote tudo na mesma passada em que lê a rede. E cuidado com uma armadilha comum: uma defesa pode estar no código, mas desligada. Já vi o reconhecimento acusar um captcha desativado, com um `if (false)` em volta da função que deveria dispará-lo, enquanto o captcha real era outro. O `<script>` carregado não quer dizer que ele dispara. Confirme olhando o que acontece quando você clica em buscar.
+Antes de escolher ferramenta, mapeie o alvo. Além da pergunta principal (API ou JavaScript), descubra a entrada e a saída que você quer, se há login, sessão ou token de estado, se há captcha e de que tipo, se há paginação, e o volume esperado. Anote tudo na mesma passada em que lê a rede. E cuidado com uma armadilha comum: uma defesa pode estar no código, mas desligada. Um captcha pode aparecer no HTML e nunca disparar: às vezes está simplesmente desativado, às vezes o site trocou de captcha e deixou a implementação antiga para trás. O `<script>` carregado não quer dizer que ele dispara. Confirme olhando o que acontece quando você clica em buscar.
 
 ### Fase 2 · Escolha da abordagem
 
-A pergunta-mãe já diz se o caminho base é HTTP ou navegador. O captcha é a segunda variável. Captcha de imagem ou token que vira parâmetro: o HTTP ainda serve, você resolve com um serviço externo e injeta o token. Captcha invisível por comportamento ou desafio de página inteira: aí o navegador é necessário.
+A pergunta principal já diz se o caminho base é HTTP ou navegador. O captcha é a segunda variável. Captcha de imagem ou token que vira parâmetro: o HTTP ainda serve, você resolve com um serviço externo e injeta o token. Captcha invisível por comportamento ou desafio de página inteira: aí o navegador é necessário.
 
-Tem um caso traiçoeiro. Quando o botão de buscar dispara uma função JavaScript que usa um id de componente gerado automaticamente, o navegador costuma ganhar. Uma vez fiquei preso num alvo que devolvia "zero resultados" com o captcha resolvido e válido. Eu jurava que era o captcha. Não era. A busca era disparada por uma função que mandava um id tipo `comp_8f3a2`, gerado pelo framework, e eu mandava o id errado, o `name` do botão visível. O servidor recebia, não reconhecia e respondia com zero resultados. No navegador, você chama a função da própria página e o id certo se resolve sozinho. "Zero resultados com tudo certo" quase sempre é id de submit errado, não a sua busca.
+Tem um caso traiçoeiro. Quando o botão de buscar dispara uma função JavaScript que usa um id de componente gerado automaticamente, o navegador costuma ganhar. Um alvo pode devolver "zero resultados" com o captcha resolvido e válido sem que o captcha seja o culpado. Alguns frameworks disparam a busca por uma função que envia um id interno do componente (algo como `comp_8f3a2`), não o `name` do botão visível. Quem reproduz a requisição no cliente HTTP tende a mandar o id visível; o servidor não reconhece e responde com zero resultados. No navegador, você chama a função da própria página e o id certo se resolve sozinho. "Zero resultados com tudo certo" quase sempre é id de submit errado, não a sua busca.
 
 ### Fase 3 · Reproduzir o fluxo
 
@@ -137,7 +137,7 @@ Antes de qualquer loop, extraia um resultado na mão. Descubra a requisição ex
 
 ### Fase 4 · Extração
 
-A lei mais importante: veja o HTML real antes de escrever o parser. E o corolário que custa caro: mesma plataforma não é o mesmo DOM. Aprendi apanhando. Tinha dois sites na mesma plataforma e reaproveitei o parser do primeiro no segundo. Num deles, um subcampo vinha aninhado na linha; no outro, numa linha separada. O parser copiado trazia o campo errado, sem reclamar. Nunca reúse um parser por suposição, só depois de comparar o HTML dos dois. Na hora de extrair, ancore no que é estável, nunca no que o site troca a cada deploy, e tolere campo ausente em vez de explodir o lote por causa de um registro malformado.
+A lei mais importante: veja o HTML real antes de escrever o parser. E o corolário que custa caro: mesma plataforma não é o mesmo DOM. Dois sites construídos sobre o mesmo CMS podem servir o mesmo dado em estruturas diferentes: num, um subcampo vem aninhado na linha; no outro, numa linha separada. Um parser reaproveitado por suposição traz o campo errado sem reclamar. Nunca reúse um parser sem antes comparar o HTML dos dois. Na hora de extrair, ancore no que é estável, nunca no que o site troca a cada deploy, e tolere campo ausente em vez de explodir o lote por causa de um registro malformado.
 
 ### Fase 5 · Escala e robustez
 
@@ -149,7 +149,7 @@ Requisições em escala causam diversos bloqueios (Rate Limit, WAF, sobrecarga d
 
 ## O resumo de bolso
 
-Antes da primeira linha de um scraper: abra o DevTools, não o editor, e leia a rede. Responda a pergunta-mãe (API ou JavaScript), que é quem escolhe a ferramenta. Prove o caminho com um Copy as cURL antes de codar. Veja o HTML real antes do parser, lembrando que mesma plataforma não é o mesmo DOM. Faça um resultado funcionar antes de fazer mil. E planeje o alarme de quebra desde já, porque ele vai quebrar, e calado.
+Antes da primeira linha de um scraper: abra o DevTools, não o editor, e leia a rede. Responda a pergunta principal (API ou JavaScript), que é quem escolhe a ferramenta. Prove o caminho com um Copy as cURL antes de codar. Veja o HTML real antes do parser, lembrando que mesma plataforma não é o mesmo DOM. Faça um resultado funcionar antes de fazer mil. E planeje o alarme de quebra desde já, porque ele vai quebrar, e calado.
   </script>
   <script src="render.js"></script>
 </body>
