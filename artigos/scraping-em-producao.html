@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Como construir um scraper que sobrevive ao mundo real — a tomada de decisão antes do código: recon com DevTools, escolha de abordagem, extração e manutenção." />
+  <meta name="keywords" content="scraping, automação, web scraping, devtools, anti-bot, captcha, recon, web crawler" />
+  <title>Como construir um scraper que sobrevive ao mundo real</title>
+
+  <!-- highlight.js (full build inclui python/bash/sql) -->
+  <script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11/highlight.min.js"></script>
+  <!-- marked (parser markdown) + DOMPurify (sanitização) -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+
+  <style>
+    :root {
+      --bg:        #f6f1e7;   /* sépia claro / creme */
+      --surface:   #efe8d8;
+      --border:    #e0d6c2;
+      --text:      #34302a;   /* marrom-grafite */
+      --muted:     #7c7363;
+      --heading:   #2a2620;
+      --accent:    #b5651d;   /* terracota */
+      --accent-dim:#8a4b1a;
+      --link:      #1f6f78;   /* teal calmo */
+      --code-bg:   #efe7d5;
+      --radius:    8px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg:        #1c1a17;
+        --surface:   #25221e;
+        --border:    #34302a;
+        --text:      #d9d2c5;
+        --muted:     #9b9183;
+        --heading:   #ece5d7;
+        --accent:    #d9913f;
+        --accent-dim:#e0a566;
+        --link:      #6fb7bf;
+        --code-bg:   #14130f;
+      }
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, 'Times New Roman', serif;
+      font-size: 18px;
+      line-height: 1.75;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a { color: var(--link); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      background: color-mix(in srgb, var(--bg) 88%, transparent);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 1.5rem; height: 52px;
+      display: flex; align-items: center; justify-content: space-between;
+      font-family: 'SF Mono', ui-monospace, 'Cascadia Code', monospace;
+    }
+    .nav-brand { font-size: 0.85rem; color: var(--accent); font-weight: 700; }
+    .nav-links { display: flex; gap: 1.25rem; list-style: none; }
+    .nav-links a { color: var(--muted); font-size: 0.8rem; }
+    .nav-links a:hover { color: var(--text); text-decoration: none; }
+
+    /* ── LAYOUT ── */
+    .wrap {
+      max-width: 1140px; margin: 0 auto; padding: 0 1.5rem;
+      display: grid; grid-template-columns: 230px 1fr; gap: 3.5rem;
+    }
+
+    /* ── TOC ── */
+    .toc {
+      position: sticky; top: 76px; align-self: start;
+      max-height: calc(100vh - 96px); overflow-y: auto;
+      font-family: 'SF Mono', ui-monospace, monospace;
+      font-size: 0.78rem; padding-bottom: 2rem;
+    }
+    .toc-title {
+      text-transform: uppercase; letter-spacing: 0.14em;
+      color: var(--accent); font-size: 0.68rem; margin-bottom: 0.85rem;
+    }
+    .toc a { display: block; color: var(--muted); padding: 3px 0; line-height: 1.4; border-left: 2px solid transparent; padding-left: 0.7rem; margin-left: -0.7rem; }
+    .toc a:hover { color: var(--text); text-decoration: none; }
+    .toc a.lvl-3 { padding-left: 1.6rem; font-size: 0.95em; color: #9a907e; }
+    .toc a.active { color: var(--accent); border-left-color: var(--accent); }
+
+    /* ── CONTENT ── */
+    article { min-width: 0; padding: 6rem 0 6rem; max-width: 720px; }
+
+    .article-kicker {
+      font-family: 'SF Mono', ui-monospace, monospace;
+      font-size: 0.75rem; letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--accent); margin-bottom: 1rem;
+    }
+
+    #content h1 {
+      font-size: clamp(1.9rem, 4.5vw, 2.7rem); font-weight: 800;
+      line-height: 1.15; letter-spacing: -0.015em; color: var(--heading);
+      margin: 0 0 1.4rem;
+    }
+    #content h2 {
+      font-size: 1.5rem; font-weight: 700; color: var(--heading);
+      margin: 3rem 0 0.4rem; padding-top: 1rem;
+      border-top: 1px solid var(--border); scroll-margin-top: 70px;
+    }
+    #content h3 {
+      font-size: 1.2rem; font-weight: 700; color: var(--heading);
+      margin: 2.2rem 0 0.3rem; scroll-margin-top: 70px;
+    }
+    #content p { margin: 1rem 0; }
+    #content ul, #content ol { margin: 1rem 0 1rem 1.4rem; }
+    #content li { margin: 0.4rem 0; }
+    #content strong { color: var(--heading); font-weight: 700; }
+    #content em { color: var(--accent-dim); }
+    #content hr { border: none; border-top: 1px solid var(--border); margin: 2.5rem 0; }
+
+    #content a { border-bottom: 1px solid color-mix(in srgb, var(--link) 35%, transparent); }
+
+    /* lead paragraph (primeiro parágrafo após h1) */
+    #content h1 + p { font-size: 1.18rem; color: var(--muted); }
+
+    /* inline code */
+    #content :not(pre) > code {
+      font-family: 'SF Mono', ui-monospace, 'Cascadia Code', monospace;
+      font-size: 0.82em; background: var(--code-bg);
+      border: 1px solid var(--border); border-radius: 4px;
+      padding: 1px 5px; color: var(--accent-dim);
+    }
+
+    /* code blocks */
+    #content pre {
+      background: var(--code-bg); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 1rem 1.15rem; margin: 1.3rem 0;
+      overflow-x: auto; font-size: 0.82rem; line-height: 1.6;
+    }
+    #content pre code {
+      font-family: 'SF Mono', ui-monospace, 'Cascadia Code', monospace;
+      background: none; padding: 0; color: var(--text);
+    }
+    /* highlight.js — paleta sépia */
+    .hljs-comment, .hljs-quote { color: #9a8f76; font-style: italic; }
+    .hljs-keyword, .hljs-selector-tag, .hljs-built_in, .hljs-name { color: #a8401a; }
+    .hljs-string, .hljs-attr, .hljs-template-tag { color: #5a7d4f; }
+    .hljs-number, .hljs-literal { color: #1f6f78; }
+    .hljs-title, .hljs-function .hljs-title, .hljs-section { color: #8a5a1f; font-weight: 600; }
+    .hljs-meta, .hljs-symbol { color: #9a907e; }
+    @media (prefers-color-scheme: dark) {
+      .hljs-comment, .hljs-quote { color: #7e7560; }
+      .hljs-keyword, .hljs-selector-tag, .hljs-built_in, .hljs-name { color: #e08a5a; }
+      .hljs-string, .hljs-attr { color: #9cc78a; }
+      .hljs-number, .hljs-literal { color: #6fb7bf; }
+      .hljs-title, .hljs-section { color: #e0a566; }
+    }
+
+    /* blockquote = callout */
+    #content blockquote {
+      border-left: 3px solid var(--accent);
+      background: var(--surface);
+      border-radius: 0 var(--radius) var(--radius) 0;
+      padding: 0.85rem 1.15rem; margin: 1.4rem 0;
+      font-size: 0.97rem;
+    }
+    #content blockquote p { margin: 0.4rem 0; }
+    #content blockquote p:first-child { margin-top: 0; }
+    #content blockquote p:last-child { margin-bottom: 0; }
+
+    /* tables */
+    #content table { width: 100%; border-collapse: collapse; margin: 1.4rem 0; font-size: 0.9rem; }
+    #content th, #content td { text-align: left; padding: 0.55rem 0.8rem; border: 1px solid var(--border); vertical-align: top; }
+    #content th { background: var(--surface); color: var(--heading); font-weight: 700; }
+
+    footer {
+      border-top: 1px solid var(--border); text-align: center;
+      padding: 2rem; color: var(--muted); font-size: 0.8rem;
+      font-family: 'SF Mono', ui-monospace, monospace;
+    }
+
+    /* ── navegação por capítulo ── */
+    #toc-nav { max-height: 40vh; overflow-y: auto; padding-right: 4px; }
+    .toc-title-2 {
+      margin-top: 1.3rem; padding-top: 1.1rem;
+      border-top: 1px solid var(--border);
+    }
+    #chapter-nav a { font-size: 0.83rem; }
+    .article-header { margin-bottom: 0.5rem; }
+    .chapter { animation: fadein 0.25s ease; }
+    @keyframes fadein { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+
+    #chapter-nav a {
+      display: block; color: var(--muted); line-height: 1.35;
+      padding: 4px 0 4px 0.7rem; margin-left: -0.7rem;
+      border-left: 2px solid transparent;
+    }
+    #chapter-nav a:hover { color: var(--text); text-decoration: none; }
+    #chapter-nav a.active { color: var(--accent); border-left-color: var(--accent); font-weight: 700; }
+
+    .chapter-nav-btns {
+      display: flex; justify-content: space-between; gap: 1rem;
+      margin-top: 3.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border);
+      font-family: 'SF Mono', ui-monospace, monospace; font-size: 0.85rem;
+    }
+    .chapter-nav-btns .cbtn { max-width: 48%; color: var(--accent); border-bottom: none; }
+    .chapter-nav-btns .cbtn.next { margin-left: auto; text-align: right; }
+    .chapter-nav-btns .cbtn:hover { text-decoration: underline; }
+
+    @media (max-width: 880px) {
+      .wrap { grid-template-columns: 1fr; gap: 0; }
+      .toc { display: none; }
+      .nav-links { display: none; }
+      article { padding-top: 5rem; }
+      body { font-size: 17px; }
+    }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <a href="../index.html" class="nav-brand">~/aliffer</a>
+    <ul class="nav-links">
+      <li><a href="../index.html#artigos">artigos</a></li>
+      <li><a href="../index.html#contact">contato</a></li>
+    </ul>
+  </nav>
+
+  <div class="wrap">
+    <aside class="toc">
+      <div class="toc-title">Índice</div>
+      <nav id="toc-nav"></nav>
+      <div class="toc-title toc-title-2">Capítulos</div>
+      <nav id="chapter-nav"></nav>
+    </aside>
+
+    <article>
+      <p class="article-kicker">$ artigo · scraping em produção</p>
+      <div id="content">Carregando…</div>
+    </article>
+  </div>
+
+  <footer>~/aliffer — offensive security &amp; automation</footer>
+
+  <!-- ───────────────── FONTE DO ARTIGO (Markdown inline) ───────────────── -->
+  <script type="text/markdown" id="article-source">
+# Como construir um scraper que sobrevive ao mundo real
+
+## Parte 1 · Como pensar um scraper
+
+*Como decidir tudo antes de escrever a primeira linha de código.*
+
+Existe um abismo entre "extrair dados de uma página" e "ter uma automação que coleta de um site que não quer ser automatizado, todos os dias, por meses". Quase todo tutorial te ensina o primeiro: faz um GET, joga o HTML num parser, pega o campo. Este aqui é sobre o segundo — e ele começa muito antes do código.
+
+Se você levar uma única frase deste capítulo, que seja esta: **a primeira ferramenta de um scraper não é a sua linguagem de programação — é o DevTools do navegador.** As decisões que definem se o seu projeto vai ser uma tarde tranquila ou uma semana no escuro são quase todas tomadas *antes* de você abrir o editor de código.
+
+Neste primeiro capítulo não tem código de scraper nenhum. É de propósito. A gente vai construir o raciocínio: o que olhar, o que decidir, e — principalmente — o que **não** fazer.
+
+## O erro número um
+
+Quem está começando abre o editor e começa a escrever código contra o site que está **vendo**: o HTML renderizado, bonitinho, na tela do navegador. Esse é o erro número um, e ele é caro porque o que você vê na tela quase nunca é o que chega pela rede.
+
+O navegador é um mentiroso conveniente. Ele baixa um HTML, executa JavaScript, faz mais dez requisições por baixo dos panos, monta a página e te entrega o resultado final. Quando você dá "inspecionar elemento", está olhando o **produto final** — não a matéria-prima que o servidor mandou. Se você escrever um scraper baseado nisso, vai passar horas tentando entender por que o seu cliente HTTP recebe um HTML vazio enquanto o navegador mostra a tabela cheia.
+
+A regra que evita isso é simples e inegociável: **mapeie o site antes de codar.** Cinco minutos lendo as requisições economizam cinco horas de código no escuro.
+
+## A decisão que define o projeto inteiro
+
+Antes de qualquer linha, você responde **uma** pergunta. Ela ramifica todo o resto do projeto — a ferramenta, a velocidade, a dificuldade, tudo:
+
+> **O conteúdo vem pronto numa requisição, ou é injetado no HTML por JavaScript?**
+
+A resposta dessa pergunta é a diferença entre um scraper de 30 linhas com um cliente HTTP, e um projeto cheio de navegador, espera de renderização e dor de cabeça. E você não responde adivinhando: você abre o DevTools e olha.
+
+### O procedimento, passo a passo
+
+1. Abra o **DevTools** (F12) → aba **Network** → filtre por **Fetch/XHR** → marque **Preserve log** (pra não perder nada num redirect).
+2. **Faça a busca à mão**, no navegador mesmo: preencha o formulário, clique em buscar, navegue até o dado aparecer na tela.
+3. Olhe o que rolou na aba Network. Você vai cair em um de três cenários:
+
+   - **Apareceu uma requisição (XHR/Fetch) cuja resposta já traz os dados em JSON.** O site é movido a API. Esse é o melhor cenário possível: você vai direto na API com um cliente HTTP simples, recebe JSON limpo, e pula a renderização inteira. JSON ainda por cima muda menos que HTML — seu scraper fica mais estável de quebra.
+   - **Não tem nenhuma XHR com os dados, mas o conteúdo já está no próprio documento HTML** (a requisição do tipo *document*, na aba Response, já contém a tabela). O site renderiza no servidor. Caminho: um cliente HTTP para baixar o HTML + uma biblioteca de parsing para extrair os campos.
+   - **O dado só existe no DOM renderizado** — você vê em *Elements*, mas ele não está nem no *document* nem em nenhuma XHR de dados. Foi montado por JavaScript a partir de pedaços. Aqui, e **só** aqui, um navegador automatizado se justifica.
+
+4. **Confirme antes de escrever código.** Achou a requisição que traz o dado? Botão direito → **Copy as cURL** → cole no terminal e rode. Se ela devolver os dados **fora do navegador**, o caminho HTTP está provado — você ainda não escreveu uma linha de código e já sabe que vai funcionar. Se ela só funciona dentro do navegador (depende de algo que o JavaScript gera na hora), você também tem sua resposta: vai precisar de um navegador automatizado.
+
+Enquanto faz isso, **anote os sinais que vão importar depois**: que cookies e tokens o site seta, quais cabeçalhos ele exige (`Referer`, algum `X-CSRF-Token`), se aparece captcha no fluxo, os status codes, os redirects. Esse rabisco é o projeto inteiro num guardanapo.
+
+### A regra de ouro
+
+Você não escolhe a ferramenta por gosto ou por hábito. **O alvo escolhe por você, e a aba Network te conta a escolha.** Navegador não é "mais robusto" — é mais lento, mais frágil e mais fácil de detectar. Ele entra quando os outros dois cenários não se aplicam, nunca antes.
+
+## As seis fases de construir um scraper
+
+O que vimos acima — reconhecer e decidir a abordagem — é o coração das duas primeiras fases. Mas o raciocínio completo, do primeiro contato até a automação rodando em produção, tem seis. Cada uma com a mesma estrutura: **o que verificar, o que fazer, o que não fazer.**
+
+### Fase 1 — Reconhecimento
+
+**Pergunta central:** "o que é esse site, e por onde o dado entra e sai?"
+
+- **O que verificar:** a decisão-mãe (API ou HTML por JS) já saiu do passo anterior; falta o resto do mapa — a entrada e a saída desejada, se há login/sessão/token de estado no fluxo, se há captcha e de que tipo, se há paginação, e o volume esperado.
+- **O que fazer:** anotar tudo isso na mesma passada em que você lê a rede. É barato agora e caro depois.
+- **O que NÃO fazer:** confiar no primeiro palpite sobre as defesas (ver a armadilha abaixo).
+
+Uma armadilha mora aqui: **uma defesa pode estar presente no código, mas desligada.** Já vi o reconhecimento acusar um captcha que, na verdade, estava desativado — havia um `if (false)` em volta da função que deveria dispará-lo, e o captcha de verdade era outro. Ter o `<script>` de um captcha carregado **não** significa que ele está ativo. Confirme qual defesa **dispara de fato**, olhando o que acontece quando você clica em buscar — não confie no primeiro palpite.
+
+### Fase 2 — Escolha da abordagem
+
+**Pergunta central:** "qual é a ferramenta mais barata que resolve isto?"
+
+A decisão-mãe já te diz se o caminho base é HTTP ou navegador. O captcha é a segunda variável, e ela pode mudar o jogo:
+
+- Captcha de imagem, ou um token que vira parâmetro → o caminho HTTP **ainda** serve: você resolve o captcha com um serviço externo e injeta o token na requisição.
+- Captcha invisível que te dá uma nota por comportamento, ou desafio de página inteira → aí o navegador passa a ser necessário.
+
+E tem um caso traiçoeiro que merece história. **Quando o botão de buscar não faz um POST simples, mas dispara uma função JavaScript que usa um id de componente gerado automaticamente** — aí o navegador costuma ganhar. Uma vez fiquei preso num alvo que devolvia "zero resultados" *mesmo com o captcha resolvido e válido*. Eu jurava que era o captcha. Não era. O submit da busca era feito por uma função JavaScript que mandava um id de componente tipo `comp_8f3a2`, gerado automaticamente pelo próprio framework da página — e eu, pelo caminho HTTP, estava mandando o id errado (o `name` do botão visível). O servidor recebia, não reconhecia, e respondia educadamente com zero resultados. No navegador você simplesmente chama a função da própria página e o id certo se resolve sozinho. **Lição: "zero resultados com tudo aparentemente certo" muitas vezes é um id de submit errado, não a sua busca.**
+
+- **O que NÃO fazer:** re-decidir a abordagem queimando tentativas no escuro. O Copy as cURL da Fase 1 existe justamente pra provar o caminho antes de você apostar nele.
+
+### Fase 3 — Reproduzir o fluxo
+
+**Pergunta central:** "eu consigo extrair UM resultado, na mão, de forma confiável?"
+
+- **O que verificar:** qual é a requisição exata que devolve o dado — método, cabeçalhos, corpo, cookies, token de estado? Ela funciona isolada, fora do navegador?
+- **O que fazer:** reproduzir essa única requisição e obter **um** resultado antes de pensar em loop, threads ou volume. Se o alvo tem captcha, esse é o momento de orçar **um** resgate de captcha só pra alcançar a página de resultado real e ver o HTML que você vai parsear.
+- **O que NÃO fazer:** automatizar em escala algo que você ainda não fez funcionar uma vez. Loop em cima de uma requisição que você não entende é multiplicar o erro.
+
+### Fase 4 — Extração
+
+**Pergunta central:** "como pego esse campo de um jeito que não quebre amanhã?"
+
+Aqui vale a lei mais importante de todas: **veja o HTML real antes de escrever o parser, sempre.** E o corolário que custa caro: **mesma plataforma não é o mesmo DOM.**
+
+Aprendi isso apanhando. Tinha dois sites rodando exatamente a mesma plataforma, e reaproveitei o parser do primeiro no segundo — afinal, "é a mesma coisa". Não era. Num deles, um subcampo vinha aninhado dentro da linha; no outro, vinha numa linha própria. O parser copiado simplesmente trazia o campo errado, sem reclamar. **A lição: nunca reúse um parser por suposição. Só depois de comparar o HTML real dos dois.**
+
+- **O que verificar:** onde o dado está na estrutura; o que é obrigatório vs. opcional; os identificadores são estáveis ou gerados automaticamente?
+- **O que fazer:** ancorar em coisas estáveis. Se os `id` são voláteis (mudam a cada deploy), não fixe o id — case pelo sufixo dele, pelo rótulo de texto ao lado, por um atributo semântico. Tolere campo ausente em vez de explodir.
+- **O que NÃO fazer:** fixar um seletor num id gerado automaticamente; deixar um registro malformado no meio do lote derrubar todos os outros.
+
+### Fase 5 — Escala e robustez
+
+**Pergunta central:** "o que acontece quando eu faço isto mil vezes?"
+
+- **O que verificar:** o alvo aguenta concorrência? Bloqueia por IP? Tem limite de taxa?
+- **O que fazer:** subir a concorrência aos poucos — e usá-la como **sonda**: muitos bloqueios (limite de taxa, WAF) só aparecem sob carga, então é melhor que apareçam no seu teste do que em produção. Ter retry com espera crescente, e um disjuntor que aborta o lote quando *tudo* começa a falhar (em vez de queimar a fila inteira contra um site que já caiu).
+- **O que NÃO fazer:** disparar cinquenta threads de cara; insistir cegamente contra um bloqueio que claramente não vai ceder.
+
+### Fase 6 — Manutenção
+
+**Pergunta central:** "como vou saber, amanhã, que isto parou de funcionar?"
+
+Essa fase é a que separa um script de um sistema, e é a mais ignorada. Um scraper raramente morre com um erro limpo. O que acontece é pior: o site muda um campo, seu seletor passa a achar nada, o parser tolerante engole o vazio, e a sua base começa a encher de registros em branco — **sem nenhum erro, sem nenhum alarme.** Você descobre semanas depois, com os dados já contaminados.
+
+- **O que verificar:** o site mudou de estrutura? O parser ainda extrai o que deveria?
+- **O que fazer:** ter um alarme de quebra. A falha de um scraper é silenciosa por natureza; o trabalho é torná-la barulhenta.
+- **O que NÃO fazer:** confiar que "rodou ontem, então roda hoje".
+
+Como construir esse alarme — detectar que o site mudou *antes* de gravar lixo, e saber que o parser parou de extrair mesmo quando nada deu erro — é assunto de um capítulo inteiro mais à frente.
+
+## O resumo de bolso
+
+Antes de escrever a primeira linha de um scraper:
+
+1. **Abra o DevTools, não o editor.** Faça a busca à mão e leia a rede.
+2. **Responda a pergunta-mãe:** API ou HTML injetado por JS? Ela escolhe sua ferramenta.
+3. **Prove o caminho** com um Copy as cURL antes de codar.
+4. **Veja o HTML real** antes de qualquer parser. Mesma plataforma ≠ mesmo DOM.
+5. **Faça um funcionar** antes de fazer mil.
+6. **Planeje o alarme de quebra** desde já — porque ele vai quebrar, e em silêncio.
+
+No próximo capítulo a gente desce pro ferramental: o que é cada peça — o cliente HTTP, a biblioteca de parsing, o navegador automatizado, o serviço de resolução de captcha — e exatamente quando cada uma entra em campo. As ferramentas concretas vão aparecer nos exemplos de código, não no meio do texto.
+
+## Parte 2 · O ferramental
+
+*As quatro peças que montam qualquer scraper — e a decisão de quando usar cada uma.*
+
+No capítulo anterior a gente decidiu o caminho sem tocar em ferramenta nenhuma. Agora vamos dar nome às peças. São basicamente quatro, e a boa notícia é que você quase nunca usa todas ao mesmo tempo — você escolhe conforme a decisão que já tomou. Os exemplos de código a seguir são ilustrativos; o raciocínio vale em qualquer linguagem.
+
+### O cliente HTTP
+
+**O que é:** a peça que conversa HTTP direto com o servidor — manda uma requisição, recebe a resposta (HTML ou JSON) — sem abrir navegador nenhum. É a ferramenta mais leve e mais rápida da caixa, e resolve a maioria dos casos: tudo que é API ou HTML renderizado no servidor.
+
+```python
+import requests
+
+r = requests.get("https://exemplo.com/busca", params={"q": "termo"})
+print(r.status_code)          # 200?
+dados = r.json()              # se a resposta for de uma API
+# html = r.text               # ou o HTML cru, se for pra parsear
+```
+
+**Quando entra:** nos dois primeiros cenários do capítulo anterior (API, ou HTML vindo do servidor). É o seu padrão — comece sempre por aqui.
+
+**A pegadinha:** o cliente HTTP padrão tem uma "assinatura" reconhecível, e alguns sites barram exatamente isso antes de te entregar qualquer coisa. "O cliente HTTP não passou" nem sempre quer dizer "preciso de navegador" — muitas vezes é só a assinatura. Como contornar isso é o assunto do próximo capítulo.
+
+### A biblioteca de parsing de HTML
+
+**O que é:** quando a resposta vem em HTML (e não em JSON), você precisa de algo que transforme aquele texto bruto numa árvore navegável, pra pescar cada campo por seletor — uma tag, uma classe, um id, ou o texto de um rótulo ao lado. É o que uma biblioteca de parsing faz.
+
+```python
+from bs4 import BeautifulSoup
+
+soup = BeautifulSoup(html, "html.parser")
+titulo = soup.select_one("h1.titulo").get_text(strip=True)
+linhas = soup.select("table#resultados tr")
+```
+
+**Quando entra:** depois de baixar HTML do servidor. Se o caminho foi a API, você nem precisa dela — o JSON já chega estruturado.
+
+**A pegadinha:** o jeito como você escreve o seletor decide se o parser sobrevive ao próximo deploy do site. Ancorar no lugar errado é a causa nº 1 de scraper que quebra em silêncio — tem um capítulo inteiro sobre isso mais à frente.
+
+### O navegador automatizado
+
+**O que é:** um navegador de verdade, dirigido por código. Ele carrega a página, executa o JavaScript, clica, preenche, espera o conteúdo aparecer — tudo que o cliente HTTP não faz. O preço: é ordens de magnitude mais lento e mais pesado, e mais fácil de detectar.
+
+```python
+from playwright.sync_api import sync_playwright
+
+with sync_playwright() as p:
+    browser = p.chromium.launch(headless=True)
+    page = browser.new_page()
+    page.goto("https://exemplo.com")
+    page.fill("#busca", "termo")
+    page.click("#enviar")
+    page.wait_for_selector("#resultados tr")   # espera o CONTEÚDO, não só a resposta
+    html = page.content()
+```
+
+**Quando entra:** no terceiro cenário do capítulo anterior — conteúdo montado só por JavaScript, desafios de página inteira, ou um captcha invisível que reprova ambiente sem tela. É o último recurso, nunca o primeiro.
+
+**A pegadinha:** "esperar a resposta da rede" não é a mesma coisa que "esperar o conteúdo aparecer". Espere o elemento que você quer existir no DOM — senão você lê uma página ainda vazia e jura que o site mudou.
+
+### O serviço de resolução de captcha
+
+**O que é:** quando há um captcha no caminho e não dá pra desviar, você terceiriza a resolução para um serviço externo: manda os parâmetros do desafio, ele devolve um token válido, e você injeta esse token na requisição (ou no campo da página) pra seguir em frente.
+
+```python
+# serviço externo de resolução (há vários: 2Captcha, NopeCHA, etc.)
+from twocaptcha import TwoCaptcha
+
+solver = TwoCaptcha("SUA_API_KEY")
+resultado = solver.turnstile(sitekey="0x4AAA...", url="https://exemplo.com")
+token = resultado["code"]          # injeta no campo/parâmetro que o site espera
+```
+
+**Quando entra:** só quando o captcha está no caminho crítico e você já procurou — e não achou — um fluxo sem ele. Resolver custa dinheiro e segundos; é a última coisa que você adiciona, não a primeira.
+
+**A pegadinha:** resolver o captcha não conserta uma sessão que o servidor já achou suspeita. Se você está recebendo captcha porque a sua conexão parece de robô, o token resolvido só adia o bloqueio — o problema está uma camada antes, e é o tema do próximo capítulo.
+
+### Juntando as peças
+
+Quatro peças. O **cliente HTTP** é o seu chão. A **biblioteca de parsing** vira HTML em dados. O **navegador** é o reforço caro, pra quando há JavaScript de verdade no caminho. E o **serviço de captcha** é o especialista que você chama por último. A arte não é dominar cada uma isoladamente — é escolher a **combinação mínima** que resolve o alvo, e nada além disso.
+
+Com a caixa de ferramentas na mesa, o próximo capítulo encara o primeiro muro de verdade: fazer o servidor te aceitar como um cliente legítimo, da camada de TLS até o formulário de busca.
+
+## Parte 3 · Conexão & Sessão
+
+*O muro antes do conteúdo: fazer o servidor te aceitar como um cliente legítimo.*
+
+Lá no Capítulo 1, a pegadinha do cliente HTTP foi: às vezes ele "não passa", e não é por falta de navegador — é pela assinatura. Este capítulo desce nessa camada. Antes de te entregar uma única linha de HTML, o servidor te avalia: como você abriu a conexão, o que seus cabeçalhos dizem, se você trouxe os cookies certos, se você seguiu o caminho. Passar por essas portas é o assunto aqui — e a lição que costura tudo é uma só: **o que te barra não é uma peça isolada, é a incoerência entre elas.**
+
+### O porteiro invisível: a assinatura de TLS
+
+Esse é o muro que mais gente bate sem entender. Você manda uma requisição, recebe um `403`, e conclui "preciso de navegador". Mas então abre o site no navegador, na mesma rede, e funciona. Mesma URL, headers parecidos — o que muda?
+
+O que muda acontece **antes** do HTTP. Para falar HTTPS, cliente e servidor primeiro negociam a conexão criptografada (o *handshake* de TLS), e essa negociação tem uma impressão digital: a combinação de versões, cifras e extensões que o seu cliente oferece (é o que chamam de JA3/JA4). Cada biblioteca tem uma impressão distinta e conhecida — e alguns sistemas de defesa barram tudo que não tem cara de navegador real **antes mesmo de olhar o que você pediu.**
+
+A saída é usar um cliente HTTP que **imita o handshake de um navegador**:
+
+```python
+# um cliente HTTP que assume o fingerprint TLS de um navegador real
+from curl_cffi import requests
+
+r = requests.get("https://exemplo.com", impersonate="chrome")
+print(r.status_code)   # passa onde o cliente padrão tomava 403
+```
+
+**A pegadinha:** isso vence a checagem do handshake — não um desafio que exige *executar* JavaScript. Se, depois de passar no TLS, ainda vem uma página de "verificando seu navegador", aí o problema é outro e o degrau é o navegador.
+
+### A identidade que você declara: os cabeçalhos
+
+Passado o handshake, vêm os cabeçalhos HTTP — e o servidor lê todos. Falta de `User-Agent`, um `User-Agent` genérico, ou uma ordem de cabeçalhos que não bate com a do navegador que você diz ser: qualquer um desses te entrega. Pior ainda é a incoerência — dizer que é um navegador no cabeçalho e ter o handshake de outra coisa.
+
+A regra é simples: conte **uma história consistente**. Cabeçalhos plausíveis e coerentes com o cliente que você está imitando.
+
+```python
+headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                  "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36",
+    "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+    "Referer": "https://exemplo.com/",
+}
+r = requests.get(url, headers=headers, impersonate="chrome")
+```
+
+**A pegadinha:** centralize esses valores num lugar só. `User-Agent` copiado em dez arquivos vira dez versões diferentes com o tempo — e basta um destoar pra você ter um bug que só aparece "às vezes".
+
+### O caminho e o estado: cookies, tokens e a ordem das coisas
+
+Muitos sites não aceitam um POST direto no endereço do resultado. Eles exigem que você **tenha passado pelo caminho**: um cookie que só é setado na página inicial, um token de estado escondido no HTML do formulário, um identificador de sessão, um `Referer` que faça sentido. Pular etapas devolve um formulário vazio ou um erro educado — e você perde horas achando que o problema é outro.
+
+A solução é reproduzir o caminho de um humano: primeiro o GET da página inicial (que te dá os cookies e o token embutido), depois o POST reusando tudo.
+
+```python
+s = requests.Session(impersonate="chrome")
+
+# 1) GET inicial: a sessão guarda os cookies, e o HTML traz o token de estado
+home = s.get("https://exemplo.com/busca")
+token = BeautifulSoup(home.text, "html.parser").select_one("input[name=_token]")["value"]
+
+# 2) POST reusando cookies (a sessão cuida) + o token + um Referer coerente
+r = s.post("https://exemplo.com/busca",
+           data={"_token": token, "q": "termo"},
+           headers={"Referer": "https://exemplo.com/busca"})
+```
+
+**A pegadinha:** se o token não está embutido no HTML, mas é *gerado por JavaScript* no navegador, o GET não te entrega ele pronto — e aí você cai no caso de precisar executar JS.
+
+### Quando o navegador é inevitável: o disfarce
+
+Às vezes não tem escapatória e você vai pro navegador automatizado. Só que ele também tem marcas que o entregam: uma propriedade que anuncia "estou sob automação", uma lista de plugins vazia, a ausência de objetos que um navegador comum sempre tem. Scripts anti-bot leem exatamente isso.
+
+A resposta é injetar, **antes de a página carregar seus scripts**, um trecho que sobrescreve essas marcas pra você parecer um navegador comum.
+
+```python
+# injeta o disfarce ANTES de a página rodar o JavaScript dela
+page.add_init_script("""
+  Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+  Object.defineProperty(navigator, 'plugins',   { get: () => [1, 2, 3] });
+  window.chrome = { runtime: {} };
+""")
+page.goto("https://exemplo.com")
+```
+
+**A pegadinha (e essa é contraintuitiva):** alguns desafios **procuram justamente o disfarce** — eles detectam quem está tentando se esconder. Já vi um caso em que *desligar* o disfarce passava e ligá-lo bloqueava. Trate isso como uma chave que você liga e desliga por alvo, testando — nunca como um "deixa sempre ligado".
+
+### A história precisa fechar
+
+Repare no fio que costura o capítulo inteiro: o servidor raramente te barra por **uma** coisa. Ele te barra pela **incoerência**. Handshake de navegador, cabeçalhos de navegador, os cookies do fluxo, comportamento de navegador — tudo isso conta a mesma história. Quando uma peça destoa do resto, o porteiro percebe. Passar por essa camada é, no fundo, contar uma história consistente do primeiro handshake até o clique no botão de buscar.
+
+Mas existe uma porta que história coerente nenhuma abre sozinha — ela te para na cara e pede que você prove, ali, que é humano. É o captcha, e é o próximo capítulo.
+  </script>
+
+  <!-- ───────────────── RENDERIZAÇÃO + NAVEGAÇÃO POR CAPÍTULO ───────────────── -->
+  <script>
+    (function () {
+      var src = document.getElementById('article-source').textContent;
+      var content = document.getElementById('content');
+      content.innerHTML = DOMPurify.sanitize(marked.parse(src));
+
+      // realce de sintaxe
+      content.querySelectorAll('pre code').forEach(function (el) {
+        try { hljs.highlightElement(el); } catch (e) {}
+      });
+
+      function slug(t) {
+        return ((t || '').toLowerCase()
+          .normalize('NFD').replace(/[̀-ͯ]/g, '')
+          .replace(/[^a-z0-9\s-]/g, '').trim()
+          .replace(/\s+/g, '-')) || 'sec';
+      }
+
+      // ---- fatia o conteúdo em capítulos (fronteira = H2 que começa com "Parte") ----
+      function isChapter(n) {
+        return n.tagName === 'H2' && /^parte\b/i.test((n.textContent || '').trim());
+      }
+      var header = document.createElement('div');
+      header.className = 'article-header';
+      var chapters = [];
+      var cur = null;
+      Array.prototype.slice.call(content.children).forEach(function (el) {
+        if (isChapter(el)) {
+          cur = document.createElement('section');
+          cur.className = 'chapter';
+          chapters.push(cur);
+          cur.appendChild(el);
+        } else if (cur) {
+          cur.appendChild(el);
+        } else {
+          header.appendChild(el);
+        }
+      });
+      content.textContent = '';
+      content.appendChild(header);
+      chapters.forEach(function (s) { content.appendChild(s); });
+
+      var h1 = header.querySelector('h1');
+      if (h1) document.title = h1.textContent;
+
+      // ---- metadados por capítulo (ids + sub-tópicos) ----
+      var data = chapters.map(function (sec, i) {
+        sec.id = 'cap-' + i;
+        var titleEl = sec.querySelector('h2');
+        var title = titleEl ? titleEl.textContent.trim() : ('Capítulo ' + (i + 1));
+        var subs = Array.prototype.slice.call(sec.querySelectorAll('h2, h3'))
+          .filter(function (h) { return h !== titleEl; });
+        subs.forEach(function (h, k) { h.id = 'c' + i + '-' + slug(h.textContent) + '-' + k; });
+        return { sec: sec, title: title, subs: subs };
+      });
+
+      var chapNav = document.getElementById('chapter-nav');
+      var tocNav = document.getElementById('toc-nav');
+      var obs = null;
+
+      data.forEach(function (cd, i) {
+        var a = document.createElement('a');
+        a.href = '#cap-' + i;
+        a.textContent = cd.title;
+        a.addEventListener('click', function (e) { e.preventDefault(); show(i); });
+        chapNav.appendChild(a);
+      });
+
+      function buildToc(i) {
+        tocNav.innerHTML = '';
+        data[i].subs.forEach(function (h) {
+          var a = document.createElement('a');
+          a.href = '#' + h.id;
+          a.textContent = h.textContent;
+          a.className = (h.tagName === 'H3') ? 'lvl-3' : 'lvl-2';
+          tocNav.appendChild(a);
+        });
+      }
+
+      function observe(i) {
+        if (obs) obs.disconnect();
+        var links = {};
+        Array.prototype.slice.call(tocNav.children).forEach(function (a) {
+          links[a.getAttribute('href').slice(1)] = a;
+        });
+        obs = new IntersectionObserver(function (entries) {
+          entries.forEach(function (en) {
+            if (en.isIntersecting) {
+              Object.keys(links).forEach(function (k) { links[k].classList.remove('active'); });
+              if (links[en.target.id]) links[en.target.id].classList.add('active');
+            }
+          });
+        }, { rootMargin: '-70px 0px -75% 0px' });
+        data[i].subs.forEach(function (h) { obs.observe(h); });
+      }
+
+      function show(i) {
+        data.forEach(function (cd, j) { cd.sec.style.display = (j === i) ? '' : 'none'; });
+        Array.prototype.slice.call(chapNav.children).forEach(function (a, j) {
+          a.classList.toggle('active', j === i);
+        });
+        buildToc(i);
+        observe(i);
+        window.scrollTo(0, 0);
+      }
+
+      // botões anterior / próximo no fim de cada capítulo
+      data.forEach(function (cd, i) {
+        var bar = document.createElement('div');
+        bar.className = 'chapter-nav-btns';
+        if (i > 0) {
+          var p = document.createElement('a');
+          p.className = 'cbtn prev'; p.href = '#cap-' + (i - 1);
+          p.textContent = '← ' + data[i - 1].title;
+          p.addEventListener('click', function (e) { e.preventDefault(); show(i - 1); });
+          bar.appendChild(p);
+        }
+        if (i < data.length - 1) {
+          var n = document.createElement('a');
+          n.className = 'cbtn next'; n.href = '#cap-' + (i + 1);
+          n.textContent = data[i + 1].title + ' →';
+          n.addEventListener('click', function (e) { e.preventDefault(); show(i + 1); });
+          bar.appendChild(n);
+        }
+        cd.sec.appendChild(bar);
+      });
+
+      // abre o capítulo do hash, se houver
+      var start = 0;
+      if (location.hash) {
+        var id = location.hash.slice(1);
+        data.forEach(function (cd, i) {
+          if (cd.sec.id === id || cd.subs.some(function (h) { return h.id === id; })) start = i;
+        });
+      }
+      show(start);
+    })();
+  </script>
+</body>
+</html>

@@ -330,6 +330,29 @@
       font-size: 0.78rem;
     }
 
+    /* ── ARTIGOS (cards clicáveis, reaproveitam o estilo de write-up) ── */
+    #artigos .articles-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    a.writeup-card { color: inherit; }
+    a.writeup-card:hover { text-decoration: none; }
+    .writeup-tags {
+      display: flex;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+    }
+    .writeup-tags .tool-tag {
+      font-family: monospace;
+      font-size: 0.7rem;
+      color: var(--muted);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      padding: 2px 8px;
+      border-radius: 3px;
+    }
+
     /* ── TOOLS ───────────────────────────────────────── */
     #tools .tools-grid {
       display: grid;
@@ -447,6 +470,7 @@
       <li><a href="#about">sobre</a></li>
       <li><a href="#skills">skills</a></li>
       <li><a href="#writeups">write-ups</a></li>
+      <li><a href="#artigos">artigos</a></li>
       <li><a href="#tools">tools</a></li>
       <li><a href="#contact">contato</a></li>
     </ul>
@@ -668,6 +692,40 @@
             <a href="#" class="writeup-link">ler →</a>
           </div>
         </div>
+
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- ARTIGOS -->
+  <section id="artigos">
+    <div class="container">
+      <p class="section-label">// artigos</p>
+      <h2>Artigos</h2>
+      <div class="articles-grid">
+
+        <a href="artigos/scraping-em-producao.html" class="writeup-card">
+          <div class="writeup-header">
+            <span class="writeup-type">Scraping em produção: contra o adversário e a erosão</span>
+            <span class="sev sev-medium">Guia</span>
+          </div>
+          <p class="writeup-desc">
+            Técnicas de scraping e automação em produção, em formato de consulta. Bypass de
+            defesas anti-bot (fingerprint de TLS, stealth, captcha, IDs randômicos,
+            concorrência) e scraping a longo prazo (detecção de drift, gabaritos
+            comportamentais, replay offline, persistência idempotente). Exemplos em Python.
+          </p>
+          <div class="writeup-footer">
+            <div class="writeup-tags">
+              <span class="tool-tag">Scraping</span>
+              <span class="tool-tag">Anti-bot</span>
+              <span class="tool-tag">Python</span>
+            </div>
+            <span class="writeup-link">ler →</span>
+          </div>
+        </a>
 
       </div>
     </div>
