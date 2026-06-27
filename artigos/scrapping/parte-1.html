@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Parte 1 — Como pensar um scraper: a decisão que vem antes do código." />
+  <title>Parte 1 · Como pensar um scraper</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11/highlight.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+</head>
+<body>
+  <nav class="topnav">
+    <a href="../../index.html" class="brand">~/aliffer</a>
+    <a href="index.html">sumário</a>
+  </nav>
+
+  <div class="wrap">
+    <aside class="sidebar">
+      <div class="side-title">Índice</div>
+      <nav id="toc"></nav>
+      <div class="side-title side-title-2">Partes</div>
+      <nav class="parts">
+        <a href="parte-1.html" class="active">1 · Como pensar</a>
+        <a href="parte-2.html">2 · O ferramental</a>
+        <a href="parte-3.html">3 · Conexão &amp; Sessão</a>
+        <a href="parte-4.html">4 · Captcha</a>
+        <a href="parte-5.html">5 · Conteúdo &amp; Escala</a>
+        <a href="parte-6.html">6 · Longo prazo</a>
+        <a href="parte-7.html">7 · Fechamento</a>
+      </nav>
+    </aside>
+
+    <article>
+      <div id="content">Carregando…</div>
+      <nav class="prevnext">
+        <a class="next" href="parte-2.html">Parte 2 · O ferramental →</a>
+      </nav>
+    </article>
+  </div>
+
+  <footer>~/aliffer — offensive security &amp; automation</footer>
+
+  <script type="text/markdown" id="md">
+# Parte 1 · Como pensar um scraper
+
+*Como decidir tudo antes de escrever a primeira linha de código.*
+
+Existe um abismo entre "extrair dados de uma página" e "ter uma automação que coleta de um site que não quer ser automatizado, todos os dias, por meses". Quase todo tutorial te ensina o primeiro: faz um GET, joga o HTML num parser, pega o campo. Aqui a gente fala do segundo, e ele começa antes do código.
+
+A primeira ferramenta de um scraper é o DevTools do navegador, não o editor. As decisões que definem se o projeto vai ser uma tarde tranquila ou uma semana no escuro são tomadas antes de você escrever uma linha. Este capítulo é sobre elas, e por isso não tem código nenhum.
+
+## O erro número um
+
+Quem começa escreve código contra o site que está vendo na tela: o HTML renderizado. O problema é que isso quase nunca é o que chega pela rede. O navegador baixa o HTML, executa o JavaScript, faz mais dez requisições por baixo e monta a página. Quando você inspeciona um elemento, está vendo o resultado final, não a matéria-prima que o servidor mandou. Escreva um scraper em cima disso e vai perder horas tentando entender por que o seu código recebe um HTML vazio enquanto o navegador mostra a tabela cheia.
+
+A regra é simples: mapeie o site antes de codar. Cinco minutos lendo as requisições economizam cinco horas no escuro.
+
+## A decisão que define o projeto inteiro
+
+Uma pergunta decide a ferramenta, a velocidade e a dificuldade de todo o resto:
+
+> O conteúdo vem pronto numa requisição, ou é montado no navegador por JavaScript?
+
+De um lado, um scraper de 30 linhas com um cliente HTTP. Do outro, um projeto cheio de navegador e espera de renderização. E você não responde no chute: abre o DevTools e olha.
+
+### O procedimento
+
+Abra o DevTools (F12), vá em Network, filtre por Fetch/XHR e marque Preserve log. Faça a busca à mão no navegador e veja o que aparece na rede. Você cai num de três casos:
+
+- Uma requisição XHR/Fetch já devolve os dados em JSON. É o melhor caso: vá direto nessa API com um cliente HTTP. JSON muda menos que HTML, então o scraper fica mais estável.
+- Nenhuma XHR traz os dados, mas eles já estão no documento HTML (a requisição do tipo *document*). O site renderiza no servidor: baixe com um cliente HTTP e extraia com uma biblioteca de parsing.
+- Os dados só existem no DOM renderizado, montados por JavaScript. Aqui, e só aqui, vale um navegador automatizado.
+
+Confirme antes de codar: botão direito na requisição, "Copy as cURL", e rode no terminal. Se devolver os dados fora do navegador, o caminho HTTP está provado. Se só funciona dentro dele, você já sabe que vai precisar de um navegador. Aproveite e anote o que importa depois: cookies, tokens, cabeçalhos exigidos (`Referer`, `X-CSRF-Token`), captcha no fluxo, status codes, redirects.
+
+### A regra de ouro
+
+Você não escolhe a ferramenta, o alvo escolhe por você, e o DevTools conta a escolha. O navegador é mais lento, mais frágil e mais fácil de detectar que um cliente HTTP, então ele entra só quando os outros dois casos não dão conta.
+
+## As seis fases
+
+Reconhecer e decidir a abordagem é o coração das duas primeiras fases. O caminho completo, do primeiro contato até a coleta em produção, tem seis.
+
+### Fase 1 · Reconhecimento
+
+Antes de escolher ferramenta, mapeie o alvo. Além da pergunta-mãe (API ou JavaScript), descubra a entrada e a saída que você quer, se há login, sessão ou token de estado, se há captcha e de que tipo, se há paginação, e o volume esperado. Anote tudo na mesma passada em que lê a rede. E cuidado com uma armadilha comum: uma defesa pode estar no código, mas desligada. Já vi o reconhecimento acusar um captcha desativado, com um `if (false)` em volta da função que deveria dispará-lo, enquanto o captcha real era outro. O `<script>` carregado não quer dizer que ele dispara. Confirme olhando o que acontece quando você clica em buscar.
+
+### Fase 2 · Escolha da abordagem
+
+A pergunta-mãe já diz se o caminho base é HTTP ou navegador. O captcha é a segunda variável. Captcha de imagem ou token que vira parâmetro: o HTTP ainda serve, você resolve com um serviço externo e injeta o token. Captcha invisível por comportamento ou desafio de página inteira: aí o navegador é necessário.
+
+Tem um caso traiçoeiro. Quando o botão de buscar dispara uma função JavaScript que usa um id de componente gerado automaticamente, o navegador costuma ganhar. Uma vez fiquei preso num alvo que devolvia "zero resultados" com o captcha resolvido e válido. Eu jurava que era o captcha. Não era. A busca era disparada por uma função que mandava um id tipo `comp_8f3a2`, gerado pelo framework, e eu mandava o id errado, o `name` do botão visível. O servidor recebia, não reconhecia e respondia com zero resultados. No navegador, você chama a função da própria página e o id certo se resolve sozinho. "Zero resultados com tudo certo" quase sempre é id de submit errado, não a sua busca.
+
+### Fase 3 · Reproduzir o fluxo
+
+Antes de qualquer loop, extraia um resultado na mão. Descubra a requisição exata que devolve o dado (método, cabeçalhos, corpo, cookies, token) e confirme que ela funciona isolada, fora do navegador. Se o alvo tem captcha, gaste uma resolução só pra alcançar a página real e ver o HTML que você vai parsear. Não automatize em escala o que você ainda não fez funcionar uma vez: loop em cima de uma requisição que você não entende só multiplica o erro.
+
+### Fase 4 · Extração
+
+A lei mais importante: veja o HTML real antes de escrever o parser. E o corolário que custa caro: mesma plataforma não é o mesmo DOM. Aprendi apanhando. Tinha dois sites na mesma plataforma e reaproveitei o parser do primeiro no segundo. Num deles, um subcampo vinha aninhado na linha; no outro, numa linha separada. O parser copiado trazia o campo errado, sem reclamar. Nunca reúse um parser por suposição, só depois de comparar o HTML dos dois. Na hora de extrair, ancore no que é estável, nunca no que o site troca a cada deploy, e tolere campo ausente em vez de explodir o lote por causa de um registro malformado.
+
+### Fase 5 · Escala e robustez
+
+Requisições em escala causam diversos bloqueios (Rate Limit, WAF, sobrecarga do servidor), e muitos só aparecem sob carga. Suba a concorrência aos poucos, usando ela como sonda: melhor o alvo te barrar no teste do que em produção. Quando o bloqueio vier, segure o tranco com retry de espera crescente para falhas passageiras e um disjuntor que aborta o lote quando as falhas viram regra. E o óbvio: não dispare cinquenta threads de cara nem insista contra um muro que não vai ceder.
+
+### Fase 6 · Manutenção
+
+É a fase que separa um script de um sistema, e a mais ignorada. Um scraper raramente morre com erro limpo. Ele falha calado: o site muda, o parser passa a achar nada, e a base enche de registro vazio sem nenhum aviso. Você só descobre muito tempo depois. O trabalho aqui é ter um alarme de quebra, porque a falha de um scraper é silenciosa por natureza. Nunca confie no "rodou ontem, então roda hoje".
+
+## O resumo de bolso
+
+Antes da primeira linha de um scraper: abra o DevTools, não o editor, e leia a rede. Responda a pergunta-mãe (API ou JavaScript), que é quem escolhe a ferramenta. Prove o caminho com um Copy as cURL antes de codar. Veja o HTML real antes do parser, lembrando que mesma plataforma não é o mesmo DOM. Faça um resultado funcionar antes de fazer mil. E planeje o alarme de quebra desde já, porque ele vai quebrar, e calado.
+  </script>
+  <script src="render.js"></script>
+</body>
+</html>

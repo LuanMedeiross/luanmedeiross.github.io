@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Parte 4 — Captcha: detectar o tipo, resolver com serviço externo, e o caso extremo." />
+  <title>Parte 4 · Captcha</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11/highlight.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+</head>
+<body>
+  <nav class="topnav">
+    <a href="../../index.html" class="brand">~/aliffer</a>
+    <a href="index.html">sumário</a>
+  </nav>
+
+  <div class="wrap">
+    <aside class="sidebar">
+      <div class="side-title">Índice</div>
+      <nav id="toc"></nav>
+      <div class="side-title side-title-2">Partes</div>
+      <nav class="parts">
+        <a href="parte-1.html">1 · Como pensar</a>
+        <a href="parte-2.html">2 · O ferramental</a>
+        <a href="parte-3.html">3 · Conexão &amp; Sessão</a>
+        <a href="parte-4.html" class="active">4 · Captcha</a>
+        <a href="parte-5.html">5 · Conteúdo &amp; Escala</a>
+        <a href="parte-6.html">6 · Longo prazo</a>
+        <a href="parte-7.html">7 · Fechamento</a>
+      </nav>
+    </aside>
+
+    <article>
+      <div id="content">Carregando…</div>
+      <nav class="prevnext">
+        <a href="parte-3.html">← Parte 3 · Conexão &amp; Sessão</a>
+        <a class="next" href="parte-5.html">Parte 5 · Conteúdo &amp; Escala →</a>
+      </nav>
+    </article>
+  </div>
+
+  <footer>~/aliffer — offensive security &amp; automation</footer>
+
+  <script type="text/markdown" id="md">
+# Parte 4 · Captcha
+
+*A porta que nenhuma coerência abre sozinha — e como atravessá-la sem perder dinheiro à toa.*
+
+Captcha assusta quem está começando, mas o segredo é desarmar a expectativa logo: na prática, você quase nunca "resolve" um captcha sozinho. Você **terceiriza** a resolução para um serviço especializado, recebe um token válido de volta, e injeta esse token onde o site espera. O trabalho de verdade não é resolver — é **detectar qual captcha é**, **descobrir como entregá-lo certo ao serviço**, e **saber a hora de não insistir.**
+
+## Antes de tudo: não resolva o que dá pra evitar
+
+Resolver captcha custa dinheiro (o serviço cobra por resolução) e tempo (segundos por desafio). Então a primeira pergunta nunca é "como resolvo?", e sim "**preciso mesmo passar por aqui?**". Existe uma rota da API que não exige o captcha? Um fluxo alternativo no site? Uma página de resultado que não o dispara? Procure o desvio antes de pagar o pedágio. O solver é a última coisa que você adiciona, não a primeira.
+
+## Detectar qual captcha é — e se está mesmo ligado
+
+Cada tipo de captcha fala uma língua diferente, então o primeiro passo é identificar com qual você está lidando. A assinatura de cada um vive no HTML:
+
+```python
+soup = BeautifulSoup(html, "html.parser")
+
+if soup.select_one("[data-sitekey]"):
+    tipo = "widget_com_sitekey"      # injeta um token num campo escondido
+elif "g-recaptcha-response" in html:
+    tipo = "checkbox_ou_invisivel"
+elif "data:image" in html:
+    tipo = "imagem"                  # uma imagem embutida pra ler
+```
+
+**A armadilha — e essa derruba muita gente:** o captcha estar **carregado** no HTML não significa que ele está **ativo**. Já vi um alvo onde o reconhecimento acusava um captcha que estava desligado — havia um `if (false)` em volta da função que deveria dispará-lo, e o captcha de verdade era outro. Antes de gastar uma resolução, confirme qual desafio **dispara de fato**: olhe o `onclick` do botão de buscar e os `if(true)/if(false)` que cercam a função do captcha. Resolver o captcha errado é dinheiro no lixo.
+
+## Resolver: o fluxo genérico
+
+O padrão é sempre o mesmo, qualquer que seja o tipo: você manda ao serviço os parâmetros do desafio (a sitekey e a URL, ou os bytes da imagem), espera o token, e injeta esse token no campo escondido ou no parâmetro que o site espera.
+
+```python
+from twocaptcha import TwoCaptcha
+solver = TwoCaptcha("SUA_API_KEY")
+
+# widget com sitekey: manda sitekey + url, recebe o token pronto
+token = solver.turnstile(sitekey=sitekey, url=url)["code"]
+
+# captcha de imagem: manda os bytes, recebe o texto lido
+texto = solver.normal("captcha.png")["code"]
+
+# o token/texto entra no POST como se você tivesse resolvido na tela
+```
+
+## Captcha de imagem estática: às vezes nem precisa de serviço
+
+Para o captcha mais simples — aquela imagem estática com letras ou números distorcidos — você nem sempre precisa de um serviço pago. Dá pra resolver localmente com **visão computacional**: um modelo de OCR roda na sua própria máquina, lê a imagem e devolve o texto. É **barato** (sem custo por resolução) e **rápido** (sem a ida e volta a um serviço externo) — e, pra um volume grande de um mesmo captcha de imagem, compensa muito.
+
+```python
+# captcha de imagem simples resolvido localmente, sem serviço pago
+import easyocr
+
+reader = easyocr.Reader(["en"])
+texto = "".join(reader.readtext("captcha.png", detail=0))
+```
+
+**A pegadinha:** isso vale só pros simples. Captcha de widget, "selecione as imagens com…", ou o que avalia comportamento não caem por OCR — pra esses, é serviço (ou pior, veja o caso extremo mais adiante).
+
+## A regra de ouro: não declare "irresolvível" cedo demais
+
+Essa é a lição que mais economiza tempo — e dinheiro. Um dia fiquei num captcha que voltava erro atrás de erro; tudo indicava que era impossível resolver. Quase abandonei o alvo inteiro. A causa não era o captcha: era **um parâmetro que faltava**. O site carregava um script não-padrão, e o serviço de resolução precisava saber disso para resolver o desafio certo. No instante em que passei o parâmetro correto, resolveu de primeira.
+
+A lição: **muito captcha "irresolvível" é só um parâmetro faltando.** Antes de desistir — leia a documentação do serviço para aquele tipo, confirme se a biblioteca tem o método, procure problemas já relatados por outras pessoas (o mesmo desafio provavelmente já travou alguém), e esgote os parâmetros opcionais. Testar costuma ser de graça quando o resultado é "não consegui resolver", então teste à vontade antes de cravar que é impossível.
+
+## Leia a sitekey, não a fixe
+
+A `sitekey` do captcha pode mudar entre deploys do site. Se você fixou ela no código, na próxima rotação você passa a pedir a resolução do captcha errado — e falha em silêncio. Extraia a sitekey do próprio HTML, em tempo de execução, sempre:
+
+```python
+sitekey = BeautifulSoup(html, "html.parser").select_one("[data-sitekey]")["data-sitekey"]
+```
+
+## O proxy e o IP de quem resolve
+
+Um detalhe que pega quem usa proxy: muitos sites **cruzam o IP que resolveu o captcha com o IP que enviou a requisição.** Se o desafio foi resolvido de um lugar (o IP do serviço de resolução, por exemplo) e o formulário sai de outro (o seu proxy), esse descasamento é um sinal claro de automação — e o site rejeita, mesmo com o token "válido".
+
+A regra: o captcha precisa ser resolvido **do mesmo IP** — ou ao menos da mesma reputação e geografia — de onde a requisição parte. É por isso que os serviços de resolução aceitam um proxy: pra resolver o desafio saindo do *seu* IP. Se você usa proxy na coleta, use o mesmo proxy na resolução.
+
+```python
+# resolve o captcha SAINDO do seu proxy, pro IP bater com o da requisição
+token = solver.turnstile(sitekey=sitekey, url=url,
+                         proxy={"type": "HTTP", "uri": "user:senha@host:porta"})["code"]
+```
+
+## O caso extremo: quando nem o captcha resolvido basta
+
+Existe uma classe de sites realmente blindados onde o problema não é (só) o captcha. A página calcula um **score de confiança** do seu navegador e do seu comportamento e, mesmo com o captcha resolvido, devolve `false` e te bloqueia. Mudar cabeçalhos, locale, stealth — nada move o ponteiro, porque o muro não é o desafio: é "isto não parece uma pessoa de verdade num navegador de verdade".
+
+Já vi essa situação de perto, e vale contar inteira porque mostra até onde a coisa vai. A gente não conseguia passar a barreira de jeito nenhum — nem com proxy, nem com o IP residencial local. Os suspeitos eram dois: o captcha (que, vindo de um IP de datacenter, já chega marcado com uma flag) e a própria confiabilidade da página, que avaliava o navegador. Provavelmente os dois ao mesmo tempo.
+
+No começo parecia que não dava pra passar aquele captcha com aquele IP, e a missão foi abortada. Até aparecer uma **extensão de navegador — a do NopeCHA** — que resolve o captcha por interação real, dentro do próprio navegador. Isso abriu a chance de tirar a prova: o bloqueio era o captcha, ou era a página?
+
+Com a extensão, o captcha passou a ser resolvido. E mesmo assim a página continuava identificando acesso automatizado. Pronto, pergunta respondida: o que sobrava era a confiabilidade. A barra estava alta o suficiente pra barrar um navegador dirigido por automação, com o captcha já resolvido. Tentamos mudar cabeçalhos — não bastou. Locale, stealth — nada. Precisava de um pulo maior: acessar a página como um usuário acessa de verdade.
+
+A virada foi essa. Primeiro, instalar a extensão no navegador do container e configurar a chave; só então abrir a página. Nela, deixar a extensão resolver o captcha **primeiro** — e não tocar no formulário ao mesmo tempo, porque isso rouba o foco do teste do captcha e estraga tudo. Resolvido o captcha, aí sim preencher e enviar o formulário, **tudo com o mouse se movendo de verdade**: uma biblioteca movia o ponteiro até a posição dos botões na tela e clicava como um humano. Era frágil (dependia da posição dos elementos na tela), mas funcionou. E, dali em diante, era só raspar.
+
+A lição: existe um teto em que disfarçar a conexão não basta — o site quer ver **comportamento humano**, e a única forma de provar é se comportar como humano de fato: um navegador real, a interação acontecendo de verdade (o mouse se movendo, cliques reais) e o captcha resolvido por uma interação genuína, não por um token injetado de fora. É caro, é frágil, é o último recurso entre os últimos recursos. Mas quando a barra é essa, é o que sobra.
+
+E continua valendo a regra que abre e fecha este capítulo: **resolver o captcha não conserta uma sessão que o servidor já achou suspeita.** Se você apanha de captcha porque a sua conexão parece de robô, o token só adia o bloqueio — a causa está uma camada antes. Trate a causa, não o sintoma.
+
+## O resumo
+
+O captcha parece o muro mais alto e costuma ser o mais mecânico: identifique o tipo, confirme que ele está ligado, entregue os parâmetros certos a um serviço, injete o token. O que separa quem passa de quem desiste não é técnica avançada — é não cravar "impossível" sem antes pesquisar e esgotar os parâmetros.
+
+Passada essa porta, o servidor finalmente te entrega o HTML. Só que agora começa um problema diferente: **extrair o dado de um jeito que não quebre amanhã** — e descobrir o que acontece quando você faz isso não uma, mas mil vezes. É o próximo capítulo.
+  </script>
+  <script src="render.js"></script>
+</body>
+</html>
