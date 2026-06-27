@@ -18,11 +18,34 @@
       <div id="content">
         <h1>Como construir um scraper que sobrevive ao mundo real</h1>
         <p class="lead">
-          Da tomada de decisão ao código: como pensar um scraper antes de escrever uma
-          linha, montar o ferramental, passar pelas defesas de um site e mantê-lo vivo
-          quando esse site muda. Sete partes, leitura por capítulos.
+          Da decisão ao código, e do código à manutenção: scraping em produção, em sete partes.
         </p>
 
+        <h2>Introdução</h2>
+        <p>
+          Este guia reúne a metodologia que usei construindo um sistema de scraping em massa:
+          coletar dados de portais que não querem ser coletados, em escala, e manter a coleta
+          de pé quando esses portais mudam. O foco é o raciocínio que vem antes de escrever
+          código, e as defesas que você encontra da primeira requisição até a manutenção meses
+          depois.
+        </p>
+        <p>
+          É generalista de propósito. Nenhum alvo é nomeado e as ferramentas aparecem só nos
+          exemplos de código, então serve tanto para quem vai escrever o primeiro scraper
+          quanto para quem já vive disso e quer organizar o mapa.
+        </p>
+
+        <h2>TL;DR</h2>
+        <blockquote>
+          <p>
+            A parte difícil do scraping não é extrair uma página, quase todo mundo consegue.
+            É continuar extraindo a coisa certa no dia seguinte, quando o site muda e nada
+            avisa. O guia vai da primeira decisão (API ou navegador?) até o alarme que avisa
+            quando a coleta quebra, em sete partes, com exemplos em Python.
+          </p>
+        </blockquote>
+
+        <h2>Conteúdo</h2>
         <div class="summary-list">
           <a class="part" href="parte-1.html">
             <div class="pnum">Parte 1</div>
