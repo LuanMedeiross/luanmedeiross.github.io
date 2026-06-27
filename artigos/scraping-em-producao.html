@@ -257,112 +257,110 @@
 
 *Como decidir tudo antes de escrever a primeira linha de código.*
 
-Existe um abismo entre "extrair dados de uma página" e "ter uma automação que coleta de um site que não quer ser automatizado, todos os dias, por meses". Quase todo tutorial te ensina o primeiro: faz um GET, joga o HTML num parser, pega o campo. Este aqui é sobre o segundo — e ele começa muito antes do código.
+Existe um abismo entre "extrair dados de uma página" e "ter uma automação que coleta de um site que não quer ser automatizado, todos os dias, por meses". Quase todo tutorial te ensina o primeiro: faz um GET, joga o HTML num parser, pega o campo. Aqui a gente fala do segundo, e ele começa bem antes do código.
 
-Se você levar uma única frase deste capítulo, que seja esta: **a primeira ferramenta de um scraper não é a sua linguagem de programação — é o DevTools do navegador.** As decisões que definem se o seu projeto vai ser uma tarde tranquila ou uma semana no escuro são quase todas tomadas *antes* de você abrir o editor de código.
+Se você guardar uma frase só deste capítulo, que seja esta: a primeira ferramenta de um scraper é o DevTools do navegador. O editor de código vem bem depois. As decisões que definem se o seu projeto vai ser uma tarde tranquila ou uma semana no escuro já estão tomadas antes de você abrir esse editor.
 
-Neste primeiro capítulo não tem código de scraper nenhum. É de propósito. A gente vai construir o raciocínio: o que olhar, o que decidir, e — principalmente — o que **não** fazer.
+Aqui não tem código de scraper nenhum, e isso é de propósito. A ideia é construir o raciocínio: o que olhar, o que decidir, o que evitar.
 
 ## O erro número um
 
-Quem está começando abre o editor e começa a escrever código contra o site que está **vendo**: o HTML renderizado, bonitinho, na tela do navegador. Esse é o erro número um, e ele é caro porque o que você vê na tela quase nunca é o que chega pela rede.
+Quem está começando abre o editor e escreve código contra o site que está vendo: o HTML renderizado, bonitinho, na tela do navegador. Esse é o erro número um, e sai caro, porque o que aparece na tela quase nunca é o que chega pela rede.
 
-O navegador é um mentiroso conveniente. Ele baixa um HTML, executa JavaScript, faz mais dez requisições por baixo dos panos, monta a página e te entrega o resultado final. Quando você dá "inspecionar elemento", está olhando o **produto final** — não a matéria-prima que o servidor mandou. Se você escrever um scraper baseado nisso, vai passar horas tentando entender por que o seu cliente HTTP recebe um HTML vazio enquanto o navegador mostra a tabela cheia.
+O navegador é um mentiroso conveniente. Ele baixa um HTML, executa JavaScript, faz mais dez requisições por baixo dos panos, monta a página e te entrega o resultado pronto. Quando você dá "inspecionar elemento", está olhando o produto final, não a matéria-prima que o servidor mandou. Quem escreve um scraper em cima disso passa horas tentando entender por que o seu cliente HTTP recebe um HTML vazio enquanto o navegador mostra a tabela cheia.
 
-A regra que evita isso é simples e inegociável: **mapeie o site antes de codar.** Cinco minutos lendo as requisições economizam cinco horas de código no escuro.
+A regra que evita isso é simples e não tem exceção: mapeie o site antes de codar. Cinco minutos lendo as requisições economizam cinco horas de código no escuro.
 
 ## A decisão que define o projeto inteiro
 
-Antes de qualquer linha, você responde **uma** pergunta. Ela ramifica todo o resto do projeto — a ferramenta, a velocidade, a dificuldade, tudo:
+Antes de qualquer linha, você responde uma pergunta. A resposta dela decide a ferramenta que você vai usar e o tamanho da dor de cabeça que vem junto.
 
-> **O conteúdo vem pronto numa requisição, ou é injetado no HTML por JavaScript?**
+> O conteúdo vem pronto numa requisição, ou é injetado no HTML por JavaScript?
 
-A resposta dessa pergunta é a diferença entre um scraper de 30 linhas com um cliente HTTP, e um projeto cheio de navegador, espera de renderização e dor de cabeça. E você não responde adivinhando: você abre o DevTools e olha.
+De um lado, um scraper de 30 linhas com um cliente HTTP. Do outro, um projeto cheio de navegador e espera de renderização. E você não chega nessa resposta no chute: abre o DevTools e olha.
 
 ### O procedimento, passo a passo
 
-1. Abra o **DevTools** (F12) → aba **Network** → filtre por **Fetch/XHR** → marque **Preserve log** (pra não perder nada num redirect).
+1. Abra o **DevTools** (F12), vá na aba **Network**, filtre por **Fetch/XHR** e marque **Preserve log** (assim você não perde nada num redirect).
 2. **Faça a busca à mão**, no navegador mesmo: preencha o formulário, clique em buscar, navegue até o dado aparecer na tela.
-3. Olhe o que rolou na aba Network. Você vai cair em um de três cenários:
+3. Olhe o que rolou na aba Network. Você vai cair num de três cenários:
 
-   - **Apareceu uma requisição (XHR/Fetch) cuja resposta já traz os dados em JSON.** O site é movido a API. Esse é o melhor cenário possível: você vai direto na API com um cliente HTTP simples, recebe JSON limpo, e pula a renderização inteira. JSON ainda por cima muda menos que HTML — seu scraper fica mais estável de quebra.
-   - **Não tem nenhuma XHR com os dados, mas o conteúdo já está no próprio documento HTML** (a requisição do tipo *document*, na aba Response, já contém a tabela). O site renderiza no servidor. Caminho: um cliente HTTP para baixar o HTML + uma biblioteca de parsing para extrair os campos.
-   - **O dado só existe no DOM renderizado** — você vê em *Elements*, mas ele não está nem no *document* nem em nenhuma XHR de dados. Foi montado por JavaScript a partir de pedaços. Aqui, e **só** aqui, um navegador automatizado se justifica.
+   - **Apareceu uma requisição (XHR/Fetch) cuja resposta já traz os dados em JSON.** O site é movido a API, e esse é o melhor cenário possível. Você vai direto na API com um cliente HTTP simples, recebe JSON limpo e pula a renderização inteira. De quebra, JSON muda menos que HTML, então seu scraper fica mais estável.
+   - **Não tem nenhuma XHR com os dados, mas o conteúdo já está no próprio documento HTML** (a requisição do tipo *document*, na aba Response, já contém a tabela). O site renderiza no servidor. O caminho é um cliente HTTP pra baixar o HTML e uma biblioteca de parsing pra extrair os campos.
+   - **O dado só existe no DOM renderizado.** Você vê em *Elements*, mas ele não está nem no *document* nem em nenhuma XHR de dados, porque foi montado por JavaScript a partir de pedaços. Aqui, e só aqui, um navegador automatizado se justifica.
 
-4. **Confirme antes de escrever código.** Achou a requisição que traz o dado? Botão direito → **Copy as cURL** → cole no terminal e rode. Se ela devolver os dados **fora do navegador**, o caminho HTTP está provado — você ainda não escreveu uma linha de código e já sabe que vai funcionar. Se ela só funciona dentro do navegador (depende de algo que o JavaScript gera na hora), você também tem sua resposta: vai precisar de um navegador automatizado.
+4. **Confirme antes de escrever código.** Achou a requisição que traz o dado? Botão direito, **Copy as cURL**, cola no terminal e roda. Se ela devolver os dados fora do navegador, o caminho HTTP está provado: você ainda não escreveu uma linha e já sabe que vai funcionar. Se ela só funciona dentro do navegador, porque depende de algo que o JavaScript gera na hora, você também tem a resposta, e vai precisar de um navegador.
 
-Enquanto faz isso, **anote os sinais que vão importar depois**: que cookies e tokens o site seta, quais cabeçalhos ele exige (`Referer`, algum `X-CSRF-Token`), se aparece captcha no fluxo, os status codes, os redirects. Esse rabisco é o projeto inteiro num guardanapo.
+Enquanto faz isso, anote os sinais que vão importar depois: que cookies e tokens o site seta, quais cabeçalhos ele exige (`Referer`, algum `X-CSRF-Token`), se aparece captcha no fluxo, os status codes, os redirects. Esse rabisco é o projeto inteiro num guardanapo.
 
 ### A regra de ouro
 
-Você não escolhe a ferramenta por gosto ou por hábito. **O alvo escolhe por você, e a aba Network te conta a escolha.** Navegador não é "mais robusto" — é mais lento, mais frágil e mais fácil de detectar. Ele entra quando os outros dois cenários não se aplicam, nunca antes.
+Você não escolhe a ferramenta por gosto nem por hábito. O alvo escolhe por você, e a aba Network te conta a escolha. O navegador é mais lento, mais frágil e mais fácil de detectar que um cliente HTTP, então ele entra só quando os outros dois cenários não dão conta.
 
 ## As seis fases de construir um scraper
 
-O que vimos acima — reconhecer e decidir a abordagem — é o coração das duas primeiras fases. Mas o raciocínio completo, do primeiro contato até a automação rodando em produção, tem seis. Cada uma com a mesma estrutura: **o que verificar, o que fazer, o que não fazer.**
+O que vimos até aqui, reconhecer e decidir a abordagem, é o coração das duas primeiras fases. Mas o raciocínio completo, do primeiro contato até a automação rodando em produção, tem seis. Todas com a mesma estrutura: o que verificar, o que fazer, o que não fazer.
 
-### Fase 1 — Reconhecimento
+### Fase 1 · Reconhecimento
 
 **Pergunta central:** "o que é esse site, e por onde o dado entra e sai?"
 
-- **O que verificar:** a decisão-mãe (API ou HTML por JS) já saiu do passo anterior; falta o resto do mapa — a entrada e a saída desejada, se há login/sessão/token de estado no fluxo, se há captcha e de que tipo, se há paginação, e o volume esperado.
+- **O que verificar:** a decisão-mãe (API ou HTML por JS) já saiu do passo anterior. Falta o resto do mapa: a entrada e a saída desejada, se há login, sessão ou token de estado no fluxo, se há captcha e de que tipo, se há paginação, e o volume esperado.
 - **O que fazer:** anotar tudo isso na mesma passada em que você lê a rede. É barato agora e caro depois.
-- **O que NÃO fazer:** confiar no primeiro palpite sobre as defesas (ver a armadilha abaixo).
+- **O que NÃO fazer:** confiar no primeiro palpite sobre as defesas, porque tem uma armadilha logo abaixo.
 
-Uma armadilha mora aqui: **uma defesa pode estar presente no código, mas desligada.** Já vi o reconhecimento acusar um captcha que, na verdade, estava desativado — havia um `if (false)` em volta da função que deveria dispará-lo, e o captcha de verdade era outro. Ter o `<script>` de um captcha carregado **não** significa que ele está ativo. Confirme qual defesa **dispara de fato**, olhando o que acontece quando você clica em buscar — não confie no primeiro palpite.
+E a armadilha é essa: uma defesa pode estar no código, mas desligada. Já vi o reconhecimento acusar um captcha que estava desativado, com um `if (false)` em volta da função que deveria dispará-lo, enquanto o captcha de verdade era outro. Ter o `<script>` de um captcha carregado não quer dizer que ele está ativo. Confirme qual defesa dispara de fato olhando o que acontece quando você clica em buscar.
 
-### Fase 2 — Escolha da abordagem
+### Fase 2 · Escolha da abordagem
 
 **Pergunta central:** "qual é a ferramenta mais barata que resolve isto?"
 
-A decisão-mãe já te diz se o caminho base é HTTP ou navegador. O captcha é a segunda variável, e ela pode mudar o jogo:
+A decisão-mãe já te diz se o caminho base é HTTP ou navegador. O captcha é a segunda variável, e ela pode virar o jogo:
 
-- Captcha de imagem, ou um token que vira parâmetro → o caminho HTTP **ainda** serve: você resolve o captcha com um serviço externo e injeta o token na requisição.
-- Captcha invisível que te dá uma nota por comportamento, ou desafio de página inteira → aí o navegador passa a ser necessário.
+- Captcha de imagem, ou um token que vira parâmetro: o caminho HTTP ainda serve. Você resolve o captcha com um serviço externo e injeta o token na requisição.
+- Captcha invisível que te dá uma nota por comportamento, ou desafio de página inteira: aí o navegador passa a ser necessário.
 
-E tem um caso traiçoeiro que merece história. **Quando o botão de buscar não faz um POST simples, mas dispara uma função JavaScript que usa um id de componente gerado automaticamente** — aí o navegador costuma ganhar. Uma vez fiquei preso num alvo que devolvia "zero resultados" *mesmo com o captcha resolvido e válido*. Eu jurava que era o captcha. Não era. O submit da busca era feito por uma função JavaScript que mandava um id de componente tipo `comp_8f3a2`, gerado automaticamente pelo próprio framework da página — e eu, pelo caminho HTTP, estava mandando o id errado (o `name` do botão visível). O servidor recebia, não reconhecia, e respondia educadamente com zero resultados. No navegador você simplesmente chama a função da própria página e o id certo se resolve sozinho. **Lição: "zero resultados com tudo aparentemente certo" muitas vezes é um id de submit errado, não a sua busca.**
+Tem um caso traiçoeiro que vale uma história. Quando o botão de buscar não faz um POST simples, mas dispara uma função JavaScript que usa um id de componente gerado automaticamente, o navegador costuma ganhar. Uma vez fiquei preso num alvo que devolvia "zero resultados" com o captcha resolvido e válido. Eu jurava que era o captcha. Não era. O submit da busca vinha de uma função JavaScript que mandava um id de componente tipo `comp_8f3a2`, gerado pelo próprio framework da página, e eu, pelo caminho HTTP, mandava o id errado, o `name` do botão visível. O servidor recebia, não reconhecia e respondia educadamente com zero resultados. No navegador, você chama a função da própria página e o id certo se resolve sozinho. Fica a lição: "zero resultados com tudo aparentemente certo" muitas vezes é um id de submit errado, não a sua busca.
 
-- **O que NÃO fazer:** re-decidir a abordagem queimando tentativas no escuro. O Copy as cURL da Fase 1 existe justamente pra provar o caminho antes de você apostar nele.
+- **O que NÃO fazer:** re-decidir a abordagem queimando tentativas no escuro. O Copy as cURL existe justamente pra provar o caminho antes de você apostar nele.
 
-### Fase 3 — Reproduzir o fluxo
+### Fase 3 · Reproduzir o fluxo
 
 **Pergunta central:** "eu consigo extrair UM resultado, na mão, de forma confiável?"
 
-- **O que verificar:** qual é a requisição exata que devolve o dado — método, cabeçalhos, corpo, cookies, token de estado? Ela funciona isolada, fora do navegador?
-- **O que fazer:** reproduzir essa única requisição e obter **um** resultado antes de pensar em loop, threads ou volume. Se o alvo tem captcha, esse é o momento de orçar **um** resgate de captcha só pra alcançar a página de resultado real e ver o HTML que você vai parsear.
-- **O que NÃO fazer:** automatizar em escala algo que você ainda não fez funcionar uma vez. Loop em cima de uma requisição que você não entende é multiplicar o erro.
+- **O que verificar:** qual é a requisição exata que devolve o dado (método, cabeçalhos, corpo, cookies, token de estado), e se ela funciona isolada, fora do navegador.
+- **O que fazer:** reproduzir essa única requisição e tirar um resultado antes de pensar em loop, threads ou volume. Se o alvo tem captcha, é a hora de gastar uma resolução só pra alcançar a página de resultado de verdade e ver o HTML que você vai parsear.
+- **O que NÃO fazer:** automatizar em escala uma coisa que você ainda não fez funcionar uma vez. Loop em cima de uma requisição que você não entende só multiplica o erro.
 
-### Fase 4 — Extração
+### Fase 4 · Extração
 
 **Pergunta central:** "como pego esse campo de um jeito que não quebre amanhã?"
 
-Aqui vale a lei mais importante de todas: **veja o HTML real antes de escrever o parser, sempre.** E o corolário que custa caro: **mesma plataforma não é o mesmo DOM.**
+Aqui vale a lei mais importante de todas: veja o HTML real antes de escrever o parser, sempre. E o corolário que custa caro: mesma plataforma não é o mesmo DOM.
 
-Aprendi isso apanhando. Tinha dois sites rodando exatamente a mesma plataforma, e reaproveitei o parser do primeiro no segundo — afinal, "é a mesma coisa". Não era. Num deles, um subcampo vinha aninhado dentro da linha; no outro, vinha numa linha própria. O parser copiado simplesmente trazia o campo errado, sem reclamar. **A lição: nunca reúse um parser por suposição. Só depois de comparar o HTML real dos dois.**
+Aprendi isso apanhando. Tinha dois sites rodando exatamente a mesma plataforma, e reaproveitei o parser do primeiro no segundo, afinal "é a mesma coisa". Não era. Num deles, um subcampo vinha aninhado dentro da linha; no outro, vinha numa linha separada. O parser copiado trazia o campo errado, sem reclamar. A lição: nunca reúse um parser por suposição, só depois de comparar o HTML real dos dois.
 
-- **O que verificar:** onde o dado está na estrutura; o que é obrigatório vs. opcional; os identificadores são estáveis ou gerados automaticamente?
-- **O que fazer:** ancorar em coisas estáveis. Se os `id` são voláteis (mudam a cada deploy), não fixe o id — case pelo sufixo dele, pelo rótulo de texto ao lado, por um atributo semântico. Tolere campo ausente em vez de explodir.
-- **O que NÃO fazer:** fixar um seletor num id gerado automaticamente; deixar um registro malformado no meio do lote derrubar todos os outros.
+- **O que verificar:** onde o dado está na estrutura, o que é obrigatório e o que é opcional, e se os identificadores são estáveis ou gerados automaticamente.
+- **O que fazer:** ancorar em coisas estáveis, nunca no que o site troca a cada deploy, e tolerar campo ausente em vez de explodir.
+- **O que NÃO fazer:** prender um seletor num id gerado automaticamente, ou deixar um registro malformado no meio do lote derrubar todos os outros.
 
-### Fase 5 — Escala e robustez
+### Fase 5 · Escala e robustez
 
 **Pergunta central:** "o que acontece quando eu faço isto mil vezes?"
 
-- **O que verificar:** o alvo aguenta concorrência? Bloqueia por IP? Tem limite de taxa?
-- **O que fazer:** subir a concorrência aos poucos — e usá-la como **sonda**: muitos bloqueios (limite de taxa, WAF) só aparecem sob carga, então é melhor que apareçam no seu teste do que em produção. Ter retry com espera crescente, e um disjuntor que aborta o lote quando *tudo* começa a falhar (em vez de queimar a fila inteira contra um site que já caiu).
-- **O que NÃO fazer:** disparar cinquenta threads de cara; insistir cegamente contra um bloqueio que claramente não vai ceder.
+- **O que verificar:** se o alvo aguenta concorrência, se bloqueia por IP, se tem limite de taxa.
+- **O que fazer:** subir a concorrência aos poucos, usando ela como sonda. Muitos bloqueios (limite de taxa, WAF) só aparecem sob carga, e é melhor que apareçam no seu teste do que em produção. Ter retry com espera crescente, e um disjuntor que aborta o lote quando tudo começa a falhar, em vez de queimar a fila inteira contra um site que já caiu.
+- **O que NÃO fazer:** disparar cinquenta threads de cara, ou insistir cegamente contra um bloqueio que claramente não vai ceder.
 
-### Fase 6 — Manutenção
+### Fase 6 · Manutenção
 
 **Pergunta central:** "como vou saber, amanhã, que isto parou de funcionar?"
 
-Essa fase é a que separa um script de um sistema, e é a mais ignorada. Um scraper raramente morre com um erro limpo. O que acontece é pior: o site muda um campo, seu seletor passa a achar nada, o parser tolerante engole o vazio, e a sua base começa a encher de registros em branco — **sem nenhum erro, sem nenhum alarme.** Você descobre semanas depois, com os dados já contaminados.
+Essa é a fase que separa um script de um sistema, e a mais ignorada. Um scraper raramente morre com um erro limpo. Ele falha calado: o site muda, o seu parser passa a achar nada, e a base vai enchendo de registro vazio sem nenhum aviso. Você só descobre muito tempo depois.
 
-- **O que verificar:** o site mudou de estrutura? O parser ainda extrai o que deveria?
-- **O que fazer:** ter um alarme de quebra. A falha de um scraper é silenciosa por natureza; o trabalho é torná-la barulhenta.
+- **O que verificar:** se o site mudou de estrutura, e se o parser ainda extrai o que deveria.
+- **O que fazer:** ter um alarme de quebra. A falha de um scraper é silenciosa por natureza, e o trabalho é torná-la barulhenta.
 - **O que NÃO fazer:** confiar que "rodou ontem, então roda hoje".
-
-Como construir esse alarme — detectar que o site mudou *antes* de gravar lixo, e saber que o parser parou de extrair mesmo quando nada deu erro — é assunto de um capítulo inteiro mais à frente.
 
 ## O resumo de bolso
 
@@ -371,11 +369,9 @@ Antes de escrever a primeira linha de um scraper:
 1. **Abra o DevTools, não o editor.** Faça a busca à mão e leia a rede.
 2. **Responda a pergunta-mãe:** API ou HTML injetado por JS? Ela escolhe sua ferramenta.
 3. **Prove o caminho** com um Copy as cURL antes de codar.
-4. **Veja o HTML real** antes de qualquer parser. Mesma plataforma ≠ mesmo DOM.
+4. **Veja o HTML real** antes de qualquer parser. Mesma plataforma não é o mesmo DOM.
 5. **Faça um funcionar** antes de fazer mil.
-6. **Planeje o alarme de quebra** desde já — porque ele vai quebrar, e em silêncio.
-
-No próximo capítulo a gente desce pro ferramental: o que é cada peça — o cliente HTTP, a biblioteca de parsing, o navegador automatizado, o serviço de resolução de captcha — e exatamente quando cada uma entra em campo. As ferramentas concretas vão aparecer nos exemplos de código, não no meio do texto.
+6. **Planeje o alarme de quebra** desde já, porque ele vai quebrar, e calado.
 
 ## Parte 2 · O ferramental
 
@@ -591,6 +587,20 @@ texto = solver.normal("captcha.png")["code"]
 # o token/texto entra no POST como se você tivesse resolvido na tela
 ```
 
+### Captcha de imagem estática: às vezes nem precisa de serviço
+
+Para o captcha mais simples — aquela imagem estática com letras ou números distorcidos — você nem sempre precisa de um serviço pago. Dá pra resolver localmente com **visão computacional**: um modelo de OCR roda na sua própria máquina, lê a imagem e devolve o texto. É **barato** (sem custo por resolução) e **rápido** (sem a ida e volta a um serviço externo) — e, pra um volume grande de um mesmo captcha de imagem, compensa muito.
+
+```python
+# captcha de imagem simples resolvido localmente, sem serviço pago
+import easyocr
+
+reader = easyocr.Reader(["en"])
+texto = "".join(reader.readtext("captcha.png", detail=0))
+```
+
+**A pegadinha:** isso vale só pros simples. Captcha de widget, "selecione as imagens com…", ou o que avalia comportamento não caem por OCR — pra esses, é serviço (ou pior, veja o caso extremo mais adiante).
+
 ### A regra de ouro: não declare "irresolvível" cedo demais
 
 Essa é a lição que mais economiza tempo — e dinheiro. Um dia fiquei num captcha que voltava erro atrás de erro; tudo indicava que era impossível resolver. Quase abandonei o alvo inteiro. A causa não era o captcha: era **um parâmetro que faltava**. O site carregava um script não-padrão, e o serviço de resolução precisava saber disso para resolver o desafio certo. No instante em que passei o parâmetro correto, resolveu de primeira.
@@ -605,17 +615,258 @@ A `sitekey` do captcha pode mudar entre deploys do site. Se você fixou ela no c
 sitekey = BeautifulSoup(html, "html.parser").select_one("[data-sitekey]")["data-sitekey"]
 ```
 
-### Quando o captcha vence mesmo
+### O proxy e o IP de quem resolve
 
-Existe um tipo que avalia o seu **comportamento** e te dá uma nota silenciosa, sem desafio visível. Esse frequentemente reprova um navegador sem tela, mesmo com o token resolvido — porque o problema não é o token, é você não parecer humano o suficiente. Duas saídas: subir para um navegador com tela (mais sinais de comportamento real) ou, de novo, voltar e procurar a rota que não passa pelo captcha.
+Um detalhe que pega quem usa proxy: muitos sites **cruzam o IP que resolveu o captcha com o IP que enviou a requisição.** Se o desafio foi resolvido de um lugar (o IP do serviço de resolução, por exemplo) e o formulário sai de outro (o seu proxy), esse descasamento é um sinal claro de automação — e o site rejeita, mesmo com o token "válido".
 
-E uma verdade que vale repetir: **resolver o captcha não conserta uma sessão que o servidor já achou suspeita.** Se você está apanhando de captcha porque a sua conexão parece de robô, o token resolvido só adia o bloqueio — o problema está uma camada antes, lá no capítulo anterior. Trate a causa, não o sintoma.
+A regra: o captcha precisa ser resolvido **do mesmo IP** — ou ao menos da mesma reputação e geografia — de onde a requisição parte. É por isso que os serviços de resolução aceitam um proxy: pra resolver o desafio saindo do *seu* IP. Se você usa proxy na coleta, use o mesmo proxy na resolução.
+
+```python
+# resolve o captcha SAINDO do seu proxy, pro IP bater com o da requisição
+token = solver.turnstile(sitekey=sitekey, url=url,
+                         proxy={"type": "HTTP", "uri": "user:senha@host:porta"})["code"]
+```
+
+### O caso extremo: quando nem o captcha resolvido basta
+
+Existe uma classe de sites realmente blindados onde o problema não é (só) o captcha. A página calcula um **score de confiança** do seu navegador e do seu comportamento e, mesmo com o captcha resolvido, devolve `false` e te bloqueia. Mudar cabeçalhos, locale, stealth — nada move o ponteiro, porque o muro não é o desafio: é "isto não parece uma pessoa de verdade num navegador de verdade".
+
+Já vi essa situação de perto, e vale contar inteira porque mostra até onde a coisa vai. A gente não conseguia passar a barreira de jeito nenhum — nem com proxy, nem com o IP residencial local. Os suspeitos eram dois: o captcha (que, vindo de um IP de datacenter, já chega marcado com uma flag) e a própria confiabilidade da página, que avaliava o navegador. Provavelmente os dois ao mesmo tempo.
+
+No começo parecia que não dava pra passar aquele captcha com aquele IP, e a missão foi abortada. Até aparecer uma **extensão de navegador — a do NopeCHA** — que resolve o captcha por interação real, dentro do próprio navegador. Isso abriu a chance de tirar a prova: o bloqueio era o captcha, ou era a página?
+
+Com a extensão, o captcha passou a ser resolvido. E mesmo assim a página continuava identificando acesso automatizado. Pronto, pergunta respondida: o que sobrava era a confiabilidade. A barra estava alta o suficiente pra barrar um navegador dirigido por automação, com o captcha já resolvido. Tentamos mudar cabeçalhos — não bastou. Locale, stealth — nada. Precisava de um pulo maior: acessar a página como um usuário acessa de verdade.
+
+A virada foi essa. Primeiro, instalar a extensão no navegador do container e configurar a chave; só então abrir a página. Nela, deixar a extensão resolver o captcha **primeiro** — e não tocar no formulário ao mesmo tempo, porque isso rouba o foco do teste do captcha e estraga tudo. Resolvido o captcha, aí sim preencher e enviar o formulário, **tudo com o mouse se movendo de verdade**: uma biblioteca movia o ponteiro até a posição dos botões na tela e clicava como um humano. Era frágil (dependia da posição dos elementos na tela), mas funcionou. E, dali em diante, era só raspar.
+
+A lição: existe um teto em que disfarçar a conexão não basta — o site quer ver **comportamento humano**, e a única forma de provar é se comportar como humano de fato: um navegador real, a interação acontecendo de verdade (o mouse se movendo, cliques reais) e o captcha resolvido por uma interação genuína, não por um token injetado de fora. É caro, é frágil, é o último recurso entre os últimos recursos. Mas quando a barra é essa, é o que sobra.
+
+E continua valendo a regra que abre e fecha este capítulo: **resolver o captcha não conserta uma sessão que o servidor já achou suspeita.** Se você apanha de captcha porque a sua conexão parece de robô, o token só adia o bloqueio — a causa está uma camada antes. Trate a causa, não o sintoma.
 
 ### O resumo
 
 O captcha parece o muro mais alto e costuma ser o mais mecânico: identifique o tipo, confirme que ele está ligado, entregue os parâmetros certos a um serviço, injete o token. O que separa quem passa de quem desiste não é técnica avançada — é não cravar "impossível" sem antes pesquisar e esgotar os parâmetros.
 
 Passada essa porta, o servidor finalmente te entrega o HTML. Só que agora começa um problema diferente: **extrair o dado de um jeito que não quebre amanhã** — e descobrir o que acontece quando você faz isso não uma, mas mil vezes. É o próximo capítulo.
+
+## Parte 5 · Conteúdo & Escala
+
+*Extrair o dado de um HTML hostil — e aguentar fazer isso mil vezes sem ser derrubado.*
+
+Você passou pela porta e o servidor te entregou o HTML. Acabou o trabalho? Não — começou outro. Este capítulo tem duas metades. A primeira é **extrair o dado de um jeito que não quebre no próximo deploy do site**. A segunda é o que acontece quando você deixa de fazer isso uma vez e passa a fazer mil: a escala traz muros que uma requisição sozinha nunca mostra.
+
+### Extrair: ancore no que é estável
+
+O erro mais comum na extração é prender o seletor em algo que o site troca a toda hora. O exemplo clássico são **ids e classes gerados dinamicamente** — `field_a8f3c2` hoje, `field_19bd0e` no próximo deploy. Fixar o seletor nesse id é garantir que o parser quebre, e quebre em silêncio.
+
+A regra é ancorar no que **não** muda. Em ordem de preferência: o *sufixo* estável do id, o **rótulo de texto** que fica ao lado do campo (esse quase nunca muda, porque um humano precisa lê-lo), ou um atributo semântico.
+
+```python
+# RUIM: preso a um id volátil — quebra no próximo deploy
+soup.select_one("#form_a8f3c2_numero")
+
+# BOM (a): casa pelo sufixo estável do id
+soup.select_one("[id$='_numero']")
+
+# BOM (b): acha pelo rótulo visível e pega o valor ao lado
+label = soup.find("label", string=re.compile("Número"))
+numero = label.find_next(class_="value").get_text(strip=True)
+```
+
+**A pegadinha:** se o site randomiza até o rótulo visível (raro), nem isso te salva — aí você vai por heurística de **conteúdo**: identifica o campo pelo formato do valor, não pela posição.
+
+### Quando o dado vem por JavaScript
+
+Se o conteúdo é montado por script (você viu isso lá no reconhecimento), tem dois caminhos. O melhor é **achar a requisição que alimenta o DOM** e consumir ela direto — quase sempre é um JSON, que muda menos que HTML e dispensa o navegador. Só quando não dá é que você renderiza — e aí o detalhe que pega todo mundo: **espere o conteúdo aparecer, não a resposta da rede.** Um DOM ainda vazio é idêntico à página inicial; espere o elemento que você quer existir.
+
+```python
+# preferível: consumir a API que alimenta o DOM (JSON, mais estável que HTML)
+dados = requests.get("https://exemplo.com/api/resultados",
+                     params={"q": "termo"}).json()
+
+# se precisar do navegador: espere o CONTEÚDO, não só a resposta
+page.wait_for_selector("[id$='tabela'] tr", timeout=6000)
+```
+
+### Parsing que dobra em vez de quebrar
+
+HTML do mundo real é irregular: campos faltam em alguns registros, tabelas vêm com colunas em ordem diferente, um item no meio do lote chega malformado. Um parser rígido explode no primeiro desvio e leva o lote inteiro junto. Um parser bom **degrada**: isola cada item, tolera ausência, e nunca confia em posição fixa.
+
+```python
+resultados = []
+for linha in linhas:
+    try:
+        resultados.append(extrair(linha))
+    except Exception as e:
+        log.warning("item ignorado: %s", e)   # 1 item ruim != lote perdido
+
+# busca a coluna pelo CABEÇALHO, não por índice fixo (sobrevive a reordenação)
+col = {th.get_text(strip=True): i for i, th in enumerate(cabecalhos)}
+data = celulas[col["Data/Hora"]].get_text(strip=True)
+```
+
+**A pegadinha:** tolerância demais tem um custo escondido — se *todos* os itens passarem a falhar, o `try/except` engole o sintoma e você não percebe que parou de extrair. Guarde essa tensão; ela é o tema do último capítulo.
+
+### Escala: a concorrência também é a sua sonda
+
+Agora a segunda metade. Fazer mil vezes não é só "repetir num loop" — a escala muda o comportamento do alvo. Servidores detectam padrões de requisição previsíveis, e muitos bloqueios (limite de taxa, WAF) **só aparecem sob carga**. Por isso a concorrência tem um papel duplo: ela acelera a coleta **e** revela o muro — de preferência no seu teste, não em produção.
+
+Na prática, você divide a entrada em N trabalhadores, cada um com sua própria sessão isolada, e devolve os resultados por uma fila — sem travas no caminho dos dados, só nos contadores compartilhados.
+
+```python
+import threading, queue
+
+fila = queue.Queue()
+
+def worker(sublote):
+    cliente = nova_sessao()             # sessão/contexto isolado por thread
+    for doc in sublote:
+        fila.put(processar(doc, cliente))
+
+# para navegador, o equivalente barato é 1 processo com N contextos isolados,
+# em vez de abrir N navegadores (que custa memória e te denuncia pelo volume).
+```
+
+**A pegadinha:** concorrência demais vira um auto-ataque de negação de serviço — você derruba o alvo ou acelera o próprio bloqueio. Existe um ponto ótimo por site; ache empiricamente, começando alto num lote pequeno e baixando até a taxa de erro estabilizar.
+
+### Falhar com elegância: retry, backoff e o disjuntor
+
+Sob escala, falhas deixam de ser exceção e viram rotina — e você precisa de três defesas. **Retry com espera crescente** (1s, 2s, 4s) para o que é transitório. **Rotação de IP** quando vêm muitos timeouts seguidos (sinal de bloqueio progressivo). E um **disjuntor**: se acontecem N falhas *consecutivas* sem nenhum sucesso no meio, o problema é sistêmico — o site caiu, mudou, ou te bloqueou de vez — e insistir só queima a fila (e, se há captcha, créditos reais). Melhor abortar e avisar uma vez.
+
+```python
+import time
+
+def com_retry(fn, tentativas=3):
+    for i in range(tentativas):
+        try:
+            return fn()
+        except ERROS_DE_REDE:
+            if i == tentativas - 1:
+                raise
+            time.sleep(2 ** i)          # 1s, 2s, 4s
+
+# disjuntor: falhas consecutivas somadas entre os trabalhadores; sucesso zera
+if falhas_consecutivas >= LIMITE:
+    parar = True                        # aborta o lote em vez de queimar tudo
+```
+
+**A pegadinha:** backoff cego contra um bloqueio definitivo só adia o inevitável. O disjuntor é justamente o reconhecimento de que, passado um limite, insistir é desperdício — a resposta certa é parar e investigar.
+
+### O fecho
+
+Extrair bem é ancorar no estável e fazer o parser dobrar em vez de quebrar. Escalar bem é tratar a concorrência como sonda e ter um jeito de parar com elegância quando o muro aparece. Com isso, você tem um scraper que funciona — hoje.
+
+E aqui mora o último e mais traiçoeiro inimigo, aquele que nenhuma técnica deste capítulo pega sozinha: o dia em que o site muda e o seu scraper **continua "funcionando"** — sem erro, sem alarme, gravando lixo na sua base enquanto você dorme tranquilo. Como perceber isso antes de a base contaminar é o assunto do último capítulo.
+
+## Parte 6 · Scraping a longo prazo
+
+*O scraper que funciona hoje vai quebrar — e o pior é que não vai avisar. Este capítulo é sobre tornar a falha barulhenta.*
+
+Todos os capítulos até aqui foram sobre fazer o scraper **funcionar**. Este é sobre mantê-lo funcionando — e é a parte que separa um script de um sistema. Quase ninguém escreve sobre ela, e é justamente onde mora a diferença entre uma coleta que dura uma tarde e uma que dura meses.
+
+### O inimigo real: a falha silenciosa
+
+Um scraper raramente morre com um erro limpo. O que acontece é pior. O site muda o nome de um campo, o seu seletor passa a achar nada, o parser tolerante (que você fez dobrar em vez de quebrar, lá na Parte 5) engole o vazio, o `INSERT` grava um registro em branco — e tudo continua "rodando". Nenhum erro. Nenhum alarme. Você descobre semanas depois, com a base já cheia de lixo.
+
+Todas as técnicas a seguir existem para uma única coisa: transformar essa falha invisível em um **alarme barulhento**.
+
+### Detecção proativa: a assinatura versionada
+
+A primeira defesa é barata e preventiva. Com **um GET por alvo**, você extrai uma "assinatura" do que é estável entre uma visita e outra — os nomes dos campos do formulário, a presença e o estado do captcha, a sitekey — e compara com um **baseline guardado no versionamento**. Roda isso periodicamente (um cron). Quando algo muda, vira um diff que você revisa: ou é uma mudança legítima (e você atualiza o baseline) ou é uma regressão (e você conserta **antes** de a produção gravar lixo).
+
+```python
+def assinatura(html):
+    soup = BeautifulSoup(html, "html.parser")
+    return {
+        "campos":  sorted(i.get("name") for i in soup.select("input[name]")),
+        "captcha": detectar_tipo(html),
+        "sitekey": (soup.select_one("[data-sitekey]") or {}).get("data-sitekey"),
+    }
+
+nova = assinatura(requests.get(URL).text)
+if nova != json.load(open("baseline.json")):
+    alertar(nova)   # revise ANTES de a produção rodar em cima de uma mudança
+```
+
+> **O detalhe que evita o falso positivo:** se os ids do formulário são randômicos, **normalize-os** antes de comparar (troque o sufixo volátil por um placeholder). Sem isso, todo deploy do site vira um "mudou" falso, e você aprende a ignorar o alarme — que é exatamente como alarmes morrem.
+
+### Detecção comportamental: o gabarito
+
+A assinatura pega "a estrutura mudou". Mas o parser pode parar de extrair com a estrutura **idêntica** — um seletor que casava deixou de casar por um detalhe sutil. Só rodar o scrape de verdade pega isso. Para isso serve um **gabarito versionado** por alvo: uma entrada de teste conhecida-boa, o número mínimo de resultados que ela deve devolver, e os campos que **nunca** podem vir vazios. Você roda o scrape real contra o gabarito e afirma as duas coisas.
+
+```python
+gabarito = {"entrada": "<entrada de teste>", "min_results": 1,
+            "campos_obrig": ["numero", "data", "partes"]}
+
+res = scrape(gabarito["entrada"])
+assert len(res) >= gabarito["min_results"]
+for campo in gabarito["campos_obrig"]:
+    assert any(r.get(campo) for r in res), f"{campo} sempre vazio — o seletor quebrou"
+```
+
+**A nuance:** derive o gabarito de um run real — a interseção dos campos que vieram preenchidos em *todos* os resultados — em vez de escrever à mão. Assim ele reflete o que o alvo realmente entrega, e não a sua suposição do que deveria entregar.
+
+### Consertar de graça: o replay offline
+
+Quando um seletor quebra, o ciclo ingênuo de conserto é caríssimo: cada tentativa significa rede, captcha e navegação completa só pra testar uma regex. A saída é separar o **parser** do resto e rodá-lo **offline, contra um HTML que um run anterior já salvou**. Sem rede, sem captcha, sem navegador — você itera o seletor em milissegundos e valida contra o gabarito com um PASS/FAIL. Isso exige uma única decisão de design lá atrás: que a função de parse receba o HTML como argumento e **não busque nada por dentro**.
+
+```python
+# parser PURO: recebe HTML, devolve dados. NÃO faz rede por dentro.
+def parse_detalhe(html, doc):
+    ...
+
+# replay: roda só o parser contra um HTML salvo de um run anterior
+html = open("captura/resposta_200.html").read()
+dados = parse_detalhe(html, doc)
+conferir_contra_gabarito(dados)   # PASS/FAIL sem ir à produção
+```
+
+> **Por que isso importa tanto:** essa separação — um parser puro, sem efeitos colaterais — é a decisão que torna todo o resto barato. Testável offline, diagnosticável, à prova de regressão. É a diferença entre depurar no escuro e depurar com a luz acesa.
+
+### Persistência que sobrevive à queda
+
+Coleta longa cai no meio — rede, reboot, bloqueio. Sem cuidado, retomar significa ou reprocessar tudo (caro, e arriscando duplicar) ou perder o que faltava. Duas técnicas resolvem. **Escrita idempotente**: uma chave única e "atualize se já existe", de modo que rodar duas vezes dê o mesmo resultado que rodar uma. E **retomada inteligente**: antes de cada execução, cruze a entrada com o que já foi coletado e processe só o que falta.
+
+```sql
+-- idempotente: a 2a vez não duplica, atualiza
+INSERT INTO resultado (chave, dados) VALUES (:chave, :dados)
+ON DUPLICATE KEY UPDATE dados = VALUES(dados);
+```
+
+```python
+# retomada: separa o que já existe do que falta, em lote
+ja_feitos = consultar_existentes(entradas)
+faltam    = [e for e in entradas if e not in ja_feitos]
+```
+
+> **Drift de esquema também é silencioso:** se o código de leitura espera uma coluna que o banco não tem mais (renomeada, migrada), muitos bancos deixam o `SELECT` falhar de um jeito que o aplicativo engole — e a deduplicação para de funcionar sem erro visível. Vale uma checagem que confirma, antes de cada release, que as colunas que você lê ainda existem.
+
+Com isso fecha o arsenal de longo prazo: detectar a quebra antes de ela contaminar a base, consertar de graça, e persistir de um jeito que sobrevive a quedas. O scraper deixa de ser algo que "rodou ontem" e vira algo em que você confia amanhã.
+
+## Parte 7 · Fechamento
+
+*O artigo em uma página — e o que fazer com ele.*
+
+### De volta às seis fases
+
+Voltamos ao começo. Lá na Parte 1, desenhamos seis fases para construir um scraper. Agora, com o ferramental e as técnicas na mão, elas se fecham assim:
+
+1. **Reconhecimento** — abra o DevTools, não o editor. A pergunta-mãe (API ou HTML por JS) escolhe sua ferramenta.
+2. **Abordagem** — a mais barata que resolve. Navegador é o último recurso, não o primeiro.
+3. **Reproduzir** — faça **um** resultado funcionar, na mão, antes de pensar em mil.
+4. **Extração** — ancore no estável; veja o HTML real; faça o parser dobrar, não quebrar.
+5. **Escala** — concorrência é sonda além de performance; tenha como parar com elegância.
+6. **Manutenção** — assuma que vai quebrar em silêncio, e construa o alarme antes.
+
+Se eu pudesse reduzir o artigo inteiro a uma frase, seria esta: **a parte difícil do scraping não é extrair uma página — quase todo mundo consegue. É saber, no dia seguinte, que você ainda está extraindo a coisa certa.** Quem entende isso para de escrever scripts descartáveis e começa a construir sistemas que duram.
+
+### Por onde começar amanhã
+
+Não tente montar tudo de uma vez. Pegue um alvo simples — um que devolva o dado em HTML do servidor, sem captcha — e percorra só as três primeiras fases: reconheça no DevTools, escolha o caminho HTTP, e faça um resultado sair. Só isso já é um scraper. Quando bater num muro — uma assinatura barrada, um captcha, um id que muda — você volta ao capítulo que trata dele. Este artigo é mapa, não receita: você não precisa de tudo de uma vez, precisa da peça certa na hora certa.
+
+### Uma palavra sobre responsabilidade
+
+Toda técnica aqui serve para passar por uma defesa que alguém colocou de propósito — e isso pede critério. Raspe só o que você tem direito de acessar; respeite os termos de uso, o `robots.txt` e a lei de proteção de dados de quem você acessa; e não martele um servidor a ponto de prejudicá-lo (a Parte 5 também é sobre isso — concorrência demais é um ataque, não uma coleta). A linha entre automação e abuso costuma ser exatamente essa: a primeira coleta, com cuidado, o que poderia ser coletado à mão; a segunda nem pergunta se deveria. Seja a primeira.
   </script>
 
   <!-- ───────────────── RENDERIZAÇÃO + NAVEGAÇÃO POR CAPÍTULO ───────────────── -->
