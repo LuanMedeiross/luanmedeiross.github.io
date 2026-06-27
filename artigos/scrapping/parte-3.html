@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Parte 3 — Conexão & Sessão: fazer o servidor te aceitar como um cliente legítimo." />
+  <title>Parte 3 · Conexão &amp; Sessão</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11/highlight.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+</head>
+<body>
+  <nav class="topnav">
+    <a href="../../index.html" class="brand">~/aliffer</a>
+    <a href="index.html">sumário</a>
+  </nav>
+
+  <div class="wrap">
+    <aside class="sidebar">
+      <div class="side-title">Índice</div>
+      <nav id="toc"></nav>
+      <div class="side-title side-title-2">Partes</div>
+      <nav class="parts">
+        <a href="parte-1.html">1 · Como pensar</a>
+        <a href="parte-2.html">2 · O ferramental</a>
+        <a href="parte-3.html" class="active">3 · Conexão &amp; Sessão</a>
+        <a href="parte-4.html">4 · Captcha</a>
+        <a href="parte-5.html">5 · Conteúdo &amp; Escala</a>
+        <a href="parte-6.html">6 · Longo prazo</a>
+        <a href="parte-7.html">7 · Fechamento</a>
+      </nav>
+    </aside>
+
+    <article>
+      <div id="content">Carregando…</div>
+      <nav class="prevnext">
+        <a href="parte-2.html">← Parte 2 · O ferramental</a>
+        <a class="next" href="parte-4.html">Parte 4 · Captcha →</a>
+      </nav>
+    </article>
+  </div>
+
+  <footer>~/aliffer — offensive security &amp; automation</footer>
+
+  <script type="text/markdown" id="md">
+# Parte 3 · Conexão &amp; Sessão
+
+*O muro antes do conteúdo: fazer o servidor te aceitar como um cliente legítimo.*
+
+Lá no Capítulo 1, a pegadinha do cliente HTTP foi: às vezes ele "não passa", e não é por falta de navegador — é pela assinatura. Este capítulo desce nessa camada. Antes de te entregar uma única linha de HTML, o servidor te avalia: como você abriu a conexão, o que seus cabeçalhos dizem, se você trouxe os cookies certos, se você seguiu o caminho. Passar por essas portas é o assunto aqui — e a lição que costura tudo é uma só: **o que te barra não é uma peça isolada, é a incoerência entre elas.**
+
+## O porteiro invisível: a assinatura de TLS
+
+Esse é o muro que mais gente bate sem entender. Você manda uma requisição, recebe um `403`, e conclui "preciso de navegador". Mas então abre o site no navegador, na mesma rede, e funciona. Mesma URL, headers parecidos — o que muda?
+
+O que muda acontece **antes** do HTTP. Para falar HTTPS, cliente e servidor primeiro negociam a conexão criptografada (o *handshake* de TLS), e essa negociação tem uma impressão digital: a combinação de versões, cifras e extensões que o seu cliente oferece (é o que chamam de JA3/JA4). Cada biblioteca tem uma impressão distinta e conhecida — e alguns sistemas de defesa barram tudo que não tem cara de navegador real **antes mesmo de olhar o que você pediu.**
+
+A saída é usar um cliente HTTP que **imita o handshake de um navegador**:
+
+```python
+# um cliente HTTP que assume o fingerprint TLS de um navegador real
+from curl_cffi import requests
+
+r = requests.get("https://exemplo.com", impersonate="chrome")
+print(r.status_code)   # passa onde o cliente padrão tomava 403
+```
+
+**A pegadinha:** isso vence a checagem do handshake — não um desafio que exige *executar* JavaScript. Se, depois de passar no TLS, ainda vem uma página de "verificando seu navegador", aí o problema é outro e o degrau é o navegador.
+
+## A identidade que você declara: os cabeçalhos
+
+Passado o handshake, vêm os cabeçalhos HTTP — e o servidor lê todos. Falta de `User-Agent`, um `User-Agent` genérico, ou uma ordem de cabeçalhos que não bate com a do navegador que você diz ser: qualquer um desses te entrega. Pior ainda é a incoerência — dizer que é um navegador no cabeçalho e ter o handshake de outra coisa.
+
+A regra é simples: conte **uma história consistente**. Cabeçalhos plausíveis e coerentes com o cliente que você está imitando.
+
+```python
+headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                  "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36",
+    "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+    "Referer": "https://exemplo.com/",
+}
+r = requests.get(url, headers=headers, impersonate="chrome")
+```
+
+**A pegadinha:** centralize esses valores num lugar só. `User-Agent` copiado em dez arquivos vira dez versões diferentes com o tempo — e basta um destoar pra você ter um bug que só aparece "às vezes".
+
+## O caminho e o estado: cookies, tokens e a ordem das coisas
+
+Muitos sites não aceitam um POST direto no endereço do resultado. Eles exigem que você **tenha passado pelo caminho**: um cookie que só é setado na página inicial, um token de estado escondido no HTML do formulário, um identificador de sessão, um `Referer` que faça sentido. Pular etapas devolve um formulário vazio ou um erro educado — e você perde horas achando que o problema é outro.
+
+A solução é reproduzir o caminho de um humano: primeiro o GET da página inicial (que te dá os cookies e o token embutido), depois o POST reusando tudo.
+
+```python
+s = requests.Session(impersonate="chrome")
+
+# 1) GET inicial: a sessão guarda os cookies, e o HTML traz o token de estado
+home = s.get("https://exemplo.com/busca")
+token = BeautifulSoup(home.text, "html.parser").select_one("input[name=_token]")["value"]
+
+# 2) POST reusando cookies (a sessão cuida) + o token + um Referer coerente
+r = s.post("https://exemplo.com/busca",
+           data={"_token": token, "q": "termo"},
+           headers={"Referer": "https://exemplo.com/busca"})
+```
+
+**A pegadinha:** se o token não está embutido no HTML, mas é *gerado por JavaScript* no navegador, o GET não te entrega ele pronto — e aí você cai no caso de precisar executar JS.
+
+## Quando o navegador é inevitável: o disfarce
+
+Às vezes não tem escapatória e você vai pro navegador automatizado. Só que ele também tem marcas que o entregam: uma propriedade que anuncia "estou sob automação", uma lista de plugins vazia, a ausência de objetos que um navegador comum sempre tem. Scripts anti-bot leem exatamente isso.
+
+A resposta é injetar, **antes de a página carregar seus scripts**, um trecho que sobrescreve essas marcas pra você parecer um navegador comum.
+
+```python
+# injeta o disfarce ANTES de a página rodar o JavaScript dela
+page.add_init_script("""
+  Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+  Object.defineProperty(navigator, 'plugins',   { get: () => [1, 2, 3] });
+  window.chrome = { runtime: {} };
+""")
+page.goto("https://exemplo.com")
+```
+
+**A pegadinha (e essa é contraintuitiva):** alguns desafios **procuram justamente o disfarce** — eles detectam quem está tentando se esconder. Já vi um caso em que *desligar* o disfarce passava e ligá-lo bloqueava. Trate isso como uma chave que você liga e desliga por alvo, testando — nunca como um "deixa sempre ligado".
+
+## A história precisa fechar
+
+Repare no fio que costura o capítulo inteiro: o servidor raramente te barra por **uma** coisa. Ele te barra pela **incoerência**. Handshake de navegador, cabeçalhos de navegador, os cookies do fluxo, comportamento de navegador — tudo isso conta a mesma história. Quando uma peça destoa do resto, o porteiro percebe. Passar por essa camada é, no fundo, contar uma história consistente do primeiro handshake até o clique no botão de buscar.
+
+Mas existe uma porta que história coerente nenhuma abre sozinha — ela te para na cara e pede que você prove, ali, que é humano. É o captcha, e é o próximo capítulo.
+  </script>
+  <script src="render.js"></script>
+</body>
+</html>

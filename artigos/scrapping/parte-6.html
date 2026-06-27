@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Parte 6 — Scraping a longo prazo: detectar a quebra antes de gravar lixo." />
+  <title>Parte 6 · Scraping a longo prazo</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11/highlight.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+</head>
+<body>
+  <nav class="topnav">
+    <a href="../../index.html" class="brand">~/aliffer</a>
+    <a href="index.html">sumário</a>
+  </nav>
+
+  <div class="wrap">
+    <aside class="sidebar">
+      <div class="side-title">Índice</div>
+      <nav id="toc"></nav>
+      <div class="side-title side-title-2">Partes</div>
+      <nav class="parts">
+        <a href="parte-1.html">1 · Como pensar</a>
+        <a href="parte-2.html">2 · O ferramental</a>
+        <a href="parte-3.html">3 · Conexão &amp; Sessão</a>
+        <a href="parte-4.html">4 · Captcha</a>
+        <a href="parte-5.html">5 · Conteúdo &amp; Escala</a>
+        <a href="parte-6.html" class="active">6 · Longo prazo</a>
+        <a href="parte-7.html">7 · Fechamento</a>
+      </nav>
+    </aside>
+
+    <article>
+      <div id="content">Carregando…</div>
+      <nav class="prevnext">
+        <a href="parte-5.html">← Parte 5 · Conteúdo &amp; Escala</a>
+        <a class="next" href="parte-7.html">Parte 7 · Fechamento →</a>
+      </nav>
+    </article>
+  </div>
+
+  <footer>~/aliffer — offensive security &amp; automation</footer>
+
+  <script type="text/markdown" id="md">
+# Parte 6 · Scraping a longo prazo
+
+*O scraper que funciona hoje vai quebrar — e o pior é que não vai avisar. Este capítulo é sobre tornar a falha barulhenta.*
+
+Todos os capítulos até aqui foram sobre fazer o scraper **funcionar**. Este é sobre mantê-lo funcionando — e é a parte que separa um script de um sistema. Quase ninguém escreve sobre ela, e é justamente onde mora a diferença entre uma coleta que dura uma tarde e uma que dura meses.
+
+## O inimigo real: a falha silenciosa
+
+Um scraper raramente morre com um erro limpo. O que acontece é pior. O site muda o nome de um campo, o seu seletor passa a achar nada, o parser tolerante (que você fez dobrar em vez de quebrar, lá na Parte 5) engole o vazio, o `INSERT` grava um registro em branco — e tudo continua "rodando". Nenhum erro. Nenhum alarme. Você descobre semanas depois, com a base já cheia de lixo.
+
+Todas as técnicas a seguir existem para uma única coisa: transformar essa falha invisível em um **alarme barulhento**.
+
+## Detecção proativa: a assinatura versionada
+
+A primeira defesa é barata e preventiva. Com **um GET por alvo**, você extrai uma "assinatura" do que é estável entre uma visita e outra — os nomes dos campos do formulário, a presença e o estado do captcha, a sitekey — e compara com um **baseline guardado no versionamento**. Roda isso periodicamente (um cron). Quando algo muda, vira um diff que você revisa: ou é uma mudança legítima (e você atualiza o baseline) ou é uma regressão (e você conserta **antes** de a produção gravar lixo).
+
+```python
+def assinatura(html):
+    soup = BeautifulSoup(html, "html.parser")
+    return {
+        "campos":  sorted(i.get("name") for i in soup.select("input[name]")),
+        "captcha": detectar_tipo(html),
+        "sitekey": (soup.select_one("[data-sitekey]") or {}).get("data-sitekey"),
+    }
+
+nova = assinatura(requests.get(URL).text)
+if nova != json.load(open("baseline.json")):
+    alertar(nova)   # revise ANTES de a produção rodar em cima de uma mudança
+```
+
+> **O detalhe que evita o falso positivo:** se os ids do formulário são randômicos, **normalize-os** antes de comparar (troque o sufixo volátil por um placeholder). Sem isso, todo deploy do site vira um "mudou" falso, e você aprende a ignorar o alarme — que é exatamente como alarmes morrem.
+
+## Detecção comportamental: o gabarito
+
+A assinatura pega "a estrutura mudou". Mas o parser pode parar de extrair com a estrutura **idêntica** — um seletor que casava deixou de casar por um detalhe sutil. Só rodar o scrape de verdade pega isso. Para isso serve um **gabarito versionado** por alvo: uma entrada de teste conhecida-boa, o número mínimo de resultados que ela deve devolver, e os campos que **nunca** podem vir vazios. Você roda o scrape real contra o gabarito e afirma as duas coisas.
+
+```python
+gabarito = {"entrada": "<entrada de teste>", "min_results": 1,
+            "campos_obrig": ["numero", "data", "partes"]}
+
+res = scrape(gabarito["entrada"])
+assert len(res) >= gabarito["min_results"]
+for campo in gabarito["campos_obrig"]:
+    assert any(r.get(campo) for r in res), f"{campo} sempre vazio — o seletor quebrou"
+```
+
+**A nuance:** derive o gabarito de um run real — a interseção dos campos que vieram preenchidos em *todos* os resultados — em vez de escrever à mão. Assim ele reflete o que o alvo realmente entrega, e não a sua suposição do que deveria entregar.
+
+## Consertar de graça: o replay offline
+
+Quando um seletor quebra, o ciclo ingênuo de conserto é caríssimo: cada tentativa significa rede, captcha e navegação completa só pra testar uma regex. A saída é separar o **parser** do resto e rodá-lo **offline, contra um HTML que um run anterior já salvou**. Sem rede, sem captcha, sem navegador — você itera o seletor em milissegundos e valida contra o gabarito com um PASS/FAIL. Isso exige uma única decisão de design lá atrás: que a função de parse receba o HTML como argumento e **não busque nada por dentro**.
+
+```python
+# parser PURO: recebe HTML, devolve dados. NÃO faz rede por dentro.
+def parse_detalhe(html, doc):
+    ...
+
+# replay: roda só o parser contra um HTML salvo de um run anterior
+html = open("captura/resposta_200.html").read()
+dados = parse_detalhe(html, doc)
+conferir_contra_gabarito(dados)   # PASS/FAIL sem ir à produção
+```
+
+> **Por que isso importa tanto:** essa separação — um parser puro, sem efeitos colaterais — é a decisão que torna todo o resto barato. Testável offline, diagnosticável, à prova de regressão. É a diferença entre depurar no escuro e depurar com a luz acesa.
+
+## Persistência que sobrevive à queda
+
+Coleta longa cai no meio — rede, reboot, bloqueio. Sem cuidado, retomar significa ou reprocessar tudo (caro, e arriscando duplicar) ou perder o que faltava. Duas técnicas resolvem. **Escrita idempotente**: uma chave única e "atualize se já existe", de modo que rodar duas vezes dê o mesmo resultado que rodar uma. E **retomada inteligente**: antes de cada execução, cruze a entrada com o que já foi coletado e processe só o que falta.
+
+```sql
+-- idempotente: a 2a vez não duplica, atualiza
+INSERT INTO resultado (chave, dados) VALUES (:chave, :dados)
+ON DUPLICATE KEY UPDATE dados = VALUES(dados);
+```
+
+```python
+# retomada: separa o que já existe do que falta, em lote
+ja_feitos = consultar_existentes(entradas)
+faltam    = [e for e in entradas if e not in ja_feitos]
+```
+
+> **Drift de esquema também é silencioso:** se o código de leitura espera uma coluna que o banco não tem mais (renomeada, migrada), muitos bancos deixam o `SELECT` falhar de um jeito que o aplicativo engole — e a deduplicação para de funcionar sem erro visível. Vale uma checagem que confirma, antes de cada release, que as colunas que você lê ainda existem.
+
+Com isso fecha o arsenal de longo prazo: detectar a quebra antes de ela contaminar a base, consertar de graça, e persistir de um jeito que sobrevive a quedas. O scraper deixa de ser algo que "rodou ontem" e vira algo em que você confia amanhã.
+  </script>
+  <script src="render.js"></script>
+</body>
+</html>

@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Parte 5 — Conteúdo & Escala: extrair sem quebrar amanhã e aguentar mil requisições." />
+  <title>Parte 5 · Conteúdo &amp; Escala</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11/highlight.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+</head>
+<body>
+  <nav class="topnav">
+    <a href="../../index.html" class="brand">~/aliffer</a>
+    <a href="index.html">sumário</a>
+  </nav>
+
+  <div class="wrap">
+    <aside class="sidebar">
+      <div class="side-title">Índice</div>
+      <nav id="toc"></nav>
+      <div class="side-title side-title-2">Partes</div>
+      <nav class="parts">
+        <a href="parte-1.html">1 · Como pensar</a>
+        <a href="parte-2.html">2 · O ferramental</a>
+        <a href="parte-3.html">3 · Conexão &amp; Sessão</a>
+        <a href="parte-4.html">4 · Captcha</a>
+        <a href="parte-5.html" class="active">5 · Conteúdo &amp; Escala</a>
+        <a href="parte-6.html">6 · Longo prazo</a>
+        <a href="parte-7.html">7 · Fechamento</a>
+      </nav>
+    </aside>
+
+    <article>
+      <div id="content">Carregando…</div>
+      <nav class="prevnext">
+        <a href="parte-4.html">← Parte 4 · Captcha</a>
+        <a class="next" href="parte-6.html">Parte 6 · Longo prazo →</a>
+      </nav>
+    </article>
+  </div>
+
+  <footer>~/aliffer — offensive security &amp; automation</footer>
+
+  <script type="text/markdown" id="md">
+# Parte 5 · Conteúdo &amp; Escala
+
+*Extrair o dado de um HTML hostil — e aguentar fazer isso mil vezes sem ser derrubado.*
+
+Você passou pela porta e o servidor te entregou o HTML. Acabou o trabalho? Não — começou outro. Este capítulo tem duas metades. A primeira é **extrair o dado de um jeito que não quebre no próximo deploy do site**. A segunda é o que acontece quando você deixa de fazer isso uma vez e passa a fazer mil: a escala traz muros que uma requisição sozinha nunca mostra.
+
+## Extrair: ancore no que é estável
+
+O erro mais comum na extração é prender o seletor em algo que o site troca a toda hora. O exemplo clássico são **ids e classes gerados dinamicamente** — `field_a8f3c2` hoje, `field_19bd0e` no próximo deploy. Fixar o seletor nesse id é garantir que o parser quebre, e quebre em silêncio.
+
+A regra é ancorar no que **não** muda. Em ordem de preferência: o *sufixo* estável do id, o **rótulo de texto** que fica ao lado do campo (esse quase nunca muda, porque um humano precisa lê-lo), ou um atributo semântico.
+
+```python
+# RUIM: preso a um id volátil — quebra no próximo deploy
+soup.select_one("#form_a8f3c2_numero")
+
+# BOM (a): casa pelo sufixo estável do id
+soup.select_one("[id$='_numero']")
+
+# BOM (b): acha pelo rótulo visível e pega o valor ao lado
+label = soup.find("label", string=re.compile("Número"))
+numero = label.find_next(class_="value").get_text(strip=True)
+```
+
+**A pegadinha:** se o site randomiza até o rótulo visível (raro), nem isso te salva — aí você vai por heurística de **conteúdo**: identifica o campo pelo formato do valor, não pela posição.
+
+## Quando o dado vem por JavaScript
+
+Se o conteúdo é montado por script (você viu isso lá no reconhecimento), tem dois caminhos. O melhor é **achar a requisição que alimenta o DOM** e consumir ela direto — quase sempre é um JSON, que muda menos que HTML e dispensa o navegador. Só quando não dá é que você renderiza — e aí o detalhe que pega todo mundo: **espere o conteúdo aparecer, não a resposta da rede.** Um DOM ainda vazio é idêntico à página inicial; espere o elemento que você quer existir.
+
+```python
+# preferível: consumir a API que alimenta o DOM (JSON, mais estável que HTML)
+dados = requests.get("https://exemplo.com/api/resultados",
+                     params={"q": "termo"}).json()
+
+# se precisar do navegador: espere o CONTEÚDO, não só a resposta
+page.wait_for_selector("[id$='tabela'] tr", timeout=6000)
+```
+
+## Parsing que dobra em vez de quebrar
+
+HTML do mundo real é irregular: campos faltam em alguns registros, tabelas vêm com colunas em ordem diferente, um item no meio do lote chega malformado. Um parser rígido explode no primeiro desvio e leva o lote inteiro junto. Um parser bom **degrada**: isola cada item, tolera ausência, e nunca confia em posição fixa.
+
+```python
+resultados = []
+for linha in linhas:
+    try:
+        resultados.append(extrair(linha))
+    except Exception as e:
+        log.warning("item ignorado: %s", e)   # 1 item ruim != lote perdido
+
+# busca a coluna pelo CABEÇALHO, não por índice fixo (sobrevive a reordenação)
+col = {th.get_text(strip=True): i for i, th in enumerate(cabecalhos)}
+data = celulas[col["Data/Hora"]].get_text(strip=True)
+```
+
+**A pegadinha:** tolerância demais tem um custo escondido — se *todos* os itens passarem a falhar, o `try/except` engole o sintoma e você não percebe que parou de extrair. Guarde essa tensão; ela é o tema do último capítulo.
+
+## Escala: a concorrência também é a sua sonda
+
+Agora a segunda metade. Fazer mil vezes não é só "repetir num loop" — a escala muda o comportamento do alvo. Servidores detectam padrões de requisição previsíveis, e muitos bloqueios (limite de taxa, WAF) **só aparecem sob carga**. Por isso a concorrência tem um papel duplo: ela acelera a coleta **e** revela o muro — de preferência no seu teste, não em produção.
+
+Na prática, você divide a entrada em N trabalhadores, cada um com sua própria sessão isolada, e devolve os resultados por uma fila — sem travas no caminho dos dados, só nos contadores compartilhados.
+
+```python
+import threading, queue
+
+fila = queue.Queue()
+
+def worker(sublote):
+    cliente = nova_sessao()             # sessão/contexto isolado por thread
+    for doc in sublote:
+        fila.put(processar(doc, cliente))
+
+# para navegador, o equivalente barato é 1 processo com N contextos isolados,
+# em vez de abrir N navegadores (que custa memória e te denuncia pelo volume).
+```
+
+**A pegadinha:** concorrência demais vira um auto-ataque de negação de serviço — você derruba o alvo ou acelera o próprio bloqueio. Existe um ponto ótimo por site; ache empiricamente, começando alto num lote pequeno e baixando até a taxa de erro estabilizar.
+
+## Falhar com elegância: retry, backoff e o disjuntor
+
+Sob escala, falhas deixam de ser exceção e viram rotina — e você precisa de três defesas. **Retry com espera crescente** (1s, 2s, 4s) para o que é transitório. **Rotação de IP** quando vêm muitos timeouts seguidos (sinal de bloqueio progressivo). E um **disjuntor**: se acontecem N falhas *consecutivas* sem nenhum sucesso no meio, o problema é sistêmico — o site caiu, mudou, ou te bloqueou de vez — e insistir só queima a fila (e, se há captcha, créditos reais). Melhor abortar e avisar uma vez.
+
+```python
+import time
+
+def com_retry(fn, tentativas=3):
+    for i in range(tentativas):
+        try:
+            return fn()
+        except ERROS_DE_REDE:
+            if i == tentativas - 1:
+                raise
+            time.sleep(2 ** i)          # 1s, 2s, 4s
+
+# disjuntor: falhas consecutivas somadas entre os trabalhadores; sucesso zera
+if falhas_consecutivas >= LIMITE:
+    parar = True                        # aborta o lote em vez de queimar tudo
+```
+
+**A pegadinha:** backoff cego contra um bloqueio definitivo só adia o inevitável. O disjuntor é justamente o reconhecimento de que, passado um limite, insistir é desperdício — a resposta certa é parar e investigar.
+
+## O fecho
+
+Extrair bem é ancorar no estável e fazer o parser dobrar em vez de quebrar. Escalar bem é tratar a concorrência como sonda e ter um jeito de parar com elegância quando o muro aparece. Com isso, você tem um scraper que funciona — hoje.
+
+E aqui mora o último e mais traiçoeiro inimigo, aquele que nenhuma técnica deste capítulo pega sozinha: o dia em que o site muda e o seu scraper **continua "funcionando"** — sem erro, sem alarme, gravando lixo na sua base enquanto você dorme tranquilo. Como perceber isso antes de a base contaminar é o assunto do último capítulo.
+  </script>
+  <script src="render.js"></script>
+</body>
+</html>
