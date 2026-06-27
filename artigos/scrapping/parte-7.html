@@ -46,28 +46,28 @@
   <script type="text/markdown" id="md">
 # Parte 7 · Fechamento
 
-*O artigo em uma página — e o que fazer com ele.*
+*O artigo em uma página, e o que fazer com ele.*
 
 ## De volta às seis fases
 
-Voltamos ao começo. Lá na Parte 1, desenhamos seis fases para construir um scraper. Agora, com o ferramental e as técnicas na mão, elas se fecham assim:
+Voltamos ao começo. As seis fases para construir um scraper se fecham assim, agora com o ferramental e as técnicas na mão:
 
-1. **Reconhecimento** — abra o DevTools, não o editor. A pergunta-mãe (API ou HTML por JS) escolhe sua ferramenta.
-2. **Abordagem** — a mais barata que resolve. Navegador é o último recurso, não o primeiro.
-3. **Reproduzir** — faça **um** resultado funcionar, na mão, antes de pensar em mil.
-4. **Extração** — ancore no estável; veja o HTML real; faça o parser dobrar, não quebrar.
-5. **Escala** — concorrência é sonda além de performance; tenha como parar com elegância.
-6. **Manutenção** — assuma que vai quebrar em silêncio, e construa o alarme antes.
+1. Reconhecimento. Abra o DevTools, não o editor. A pergunta-mãe (API ou HTML por JS) escolhe sua ferramenta.
+2. Abordagem. A mais barata que resolve. Navegador é o último recurso, não o primeiro.
+3. Reproduzir. Faça um resultado funcionar, na mão, antes de pensar em mil.
+4. Extração. Ancore no estável; veja o HTML real; faça o parser dobrar, não quebrar.
+5. Escala. Concorrência é sonda além de performance; tenha como parar com elegância.
+6. Manutenção. Assuma que vai quebrar em silêncio, e construa o alarme antes.
 
-Se eu pudesse reduzir o artigo inteiro a uma frase, seria esta: **a parte difícil do scraping não é extrair uma página — quase todo mundo consegue. É saber, no dia seguinte, que você ainda está extraindo a coisa certa.** Quem entende isso para de escrever scripts descartáveis e começa a construir sistemas que duram.
+Se eu pudesse reduzir o artigo inteiro a uma frase, seria esta: a parte difícil do scraping não é extrair uma página, isso quase todo mundo consegue. O difícil é saber, no dia seguinte, que você ainda está extraindo a coisa certa. Quem entende isso para de escrever scripts descartáveis e começa a construir sistemas que duram.
 
 ## Por onde começar amanhã
 
-Não tente montar tudo de uma vez. Pegue um alvo simples — um que devolva o dado em HTML do servidor, sem captcha — e percorra só as três primeiras fases: reconheça no DevTools, escolha o caminho HTTP, e faça um resultado sair. Só isso já é um scraper. Quando bater num muro — uma assinatura barrada, um captcha, um id que muda — você volta ao capítulo que trata dele. Este artigo é mapa, não receita: você não precisa de tudo de uma vez, precisa da peça certa na hora certa.
+Não tente montar tudo de uma vez. Pegue um alvo simples (um que devolva o dado em HTML do servidor, sem captcha) e percorra só as três primeiras fases: reconheça no DevTools, escolha o caminho HTTP, e faça um resultado sair. Só isso já é um scraper. Quando bater num muro (uma assinatura barrada, um captcha, um id que muda), você volta ao trecho que trata dele. Este artigo é mapa, não receita: você não precisa de tudo de uma vez, precisa da peça certa na hora certa.
 
 ## Uma palavra sobre responsabilidade
 
-Toda técnica aqui serve para passar por uma defesa que alguém colocou de propósito — e isso pede critério. Raspe só o que você tem direito de acessar; respeite os termos de uso, o `robots.txt` e a lei de proteção de dados de quem você acessa; e não martele um servidor a ponto de prejudicá-lo (a Parte 5 também é sobre isso — concorrência demais é um ataque, não uma coleta). A linha entre automação e abuso costuma ser exatamente essa: a primeira coleta, com cuidado, o que poderia ser coletado à mão; a segunda nem pergunta se deveria. Seja a primeira.
+Toda técnica aqui serve para passar por uma defesa que alguém colocou de propósito, e isso pede critério. Raspe só o que você tem direito de acessar; respeite os termos de uso, o `robots.txt` e a lei de proteção de dados de quem você acessa; e não martele um servidor a ponto de prejudicá-lo (concorrência demais é um ataque, não uma coleta). A linha entre automação e abuso costuma ser exatamente essa: a primeira coleta, com cuidado, o que poderia ser coletado à mão; a segunda nem pergunta se deveria. Seja a primeira.
   </script>
   <script src="render.js"></script>
 </body>

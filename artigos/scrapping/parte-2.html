@@ -46,13 +46,13 @@
   <script type="text/markdown" id="md">
 # Parte 2 · O ferramental
 
-*As quatro peças que montam qualquer scraper — e a decisão de quando usar cada uma.*
+*As quatro peças que montam qualquer scraper, e quando usar cada uma.*
 
-No capítulo anterior a gente decidiu o caminho sem tocar em ferramenta nenhuma. Agora vamos dar nome às peças. São basicamente quatro, e a boa notícia é que você quase nunca usa todas ao mesmo tempo — você escolhe conforme a decisão que já tomou. Os exemplos de código a seguir são ilustrativos; o raciocínio vale em qualquer linguagem.
+São quatro ferramentas, e você quase nunca usa todas ao mesmo tempo: escolhe conforme a decisão que já tomou. Os exemplos de código abaixo são ilustrativos; o raciocínio vale em qualquer linguagem.
 
 ## O cliente HTTP
 
-**O que é:** a peça que conversa HTTP direto com o servidor — manda uma requisição, recebe a resposta (HTML ou JSON) — sem abrir navegador nenhum. É a ferramenta mais leve e mais rápida da caixa, e resolve a maioria dos casos: tudo que é API ou HTML renderizado no servidor.
+É a peça que fala HTTP direto com o servidor, manda uma requisição e recebe a resposta (HTML ou JSON), sem abrir navegador. É a mais leve e rápida da caixa, e resolve a maioria dos casos: tudo que é API ou HTML renderizado no servidor. Comece sempre por aqui.
 
 ```python
 import requests
@@ -63,13 +63,11 @@ dados = r.json()              # se a resposta for de uma API
 # html = r.text               # ou o HTML cru, se for pra parsear
 ```
 
-**Quando entra:** nos dois primeiros cenários do capítulo anterior (API, ou HTML vindo do servidor). É o seu padrão — comece sempre por aqui.
-
-**A pegadinha:** o cliente HTTP padrão tem uma "assinatura" reconhecível, e alguns sites barram exatamente isso antes de te entregar qualquer coisa. "O cliente HTTP não passou" nem sempre quer dizer "preciso de navegador" — muitas vezes é só a assinatura. Como contornar isso é o assunto do próximo capítulo.
+A pegadinha é que o cliente HTTP padrão tem uma assinatura reconhecível, e alguns sites barram exatamente isso antes de entregar qualquer coisa. Quando ele "não passa", nem sempre é porque você precisa de navegador; muitas vezes é só a assinatura.
 
 ## A biblioteca de parsing de HTML
 
-**O que é:** quando a resposta vem em HTML (e não em JSON), você precisa de algo que transforme aquele texto bruto numa árvore navegável, pra pescar cada campo por seletor — uma tag, uma classe, um id, ou o texto de um rótulo ao lado. É o que uma biblioteca de parsing faz.
+Quando a resposta vem em HTML, e não em JSON, você precisa transformar aquele texto bruto numa árvore navegável pra pescar cada campo por seletor: uma tag, uma classe, um id, ou o texto de um rótulo ao lado. Se o caminho foi a API, você nem precisa dela, porque o JSON já chega estruturado.
 
 ```python
 from bs4 import BeautifulSoup
@@ -79,13 +77,11 @@ titulo = soup.select_one("h1.titulo").get_text(strip=True)
 linhas = soup.select("table#resultados tr")
 ```
 
-**Quando entra:** depois de baixar HTML do servidor. Se o caminho foi a API, você nem precisa dela — o JSON já chega estruturado.
-
-**A pegadinha:** o jeito como você escreve o seletor decide se o parser sobrevive ao próximo deploy do site. Ancorar no lugar errado é a causa nº 1 de scraper que quebra em silêncio — tem um capítulo inteiro sobre isso mais à frente.
+O jeito como você escreve o seletor decide se o parser sobrevive ao próximo deploy do site. Ancorar no lugar errado é a causa número um de scraper que quebra em silêncio.
 
 ## O navegador automatizado
 
-**O que é:** um navegador de verdade, dirigido por código. Ele carrega a página, executa o JavaScript, clica, preenche, espera o conteúdo aparecer — tudo que o cliente HTTP não faz. O preço: é ordens de magnitude mais lento e mais pesado, e mais fácil de detectar.
+Um navegador de verdade, dirigido por código. Ele carrega a página, executa o JavaScript, clica, preenche e espera o conteúdo aparecer, tudo que o cliente HTTP não faz. O preço é alto: ordens de magnitude mais lento e mais pesado, e mais fácil de detectar. Por isso é o último recurso, e entra só quando o conteúdo é montado por JavaScript, quando há um desafio de página inteira, ou quando um captcha invisível reprova um ambiente sem tela.
 
 ```python
 from playwright.sync_api import sync_playwright
@@ -100,13 +96,11 @@ with sync_playwright() as p:
     html = page.content()
 ```
 
-**Quando entra:** no terceiro cenário do capítulo anterior — conteúdo montado só por JavaScript, desafios de página inteira, ou um captcha invisível que reprova ambiente sem tela. É o último recurso, nunca o primeiro.
-
-**A pegadinha:** "esperar a resposta da rede" não é a mesma coisa que "esperar o conteúdo aparecer". Espere o elemento que você quer existir no DOM — senão você lê uma página ainda vazia e jura que o site mudou.
+Um detalhe que pega todo mundo: esperar a resposta da rede não é a mesma coisa que esperar o conteúdo aparecer. Espere o elemento que você quer existir no DOM, senão você lê uma página ainda vazia e jura que o site mudou.
 
 ## O serviço de resolução de captcha
 
-**O que é:** quando há um captcha no caminho e não dá pra desviar, você terceiriza a resolução para um serviço externo: manda os parâmetros do desafio, ele devolve um token válido, e você injeta esse token na requisição (ou no campo da página) pra seguir em frente.
+Quando há um captcha no caminho e não dá pra desviar, você terceiriza a resolução. Manda os parâmetros do desafio para um serviço externo, recebe um token válido e injeta esse token na requisição ou no campo da página. É a última coisa que você adiciona, porque custa dinheiro e segundos.
 
 ```python
 # serviço externo de resolução (há vários: 2Captcha, NopeCHA, etc.)
@@ -117,15 +111,11 @@ resultado = solver.turnstile(sitekey="0x4AAA...", url="https://exemplo.com")
 token = resultado["code"]          # injeta no campo/parâmetro que o site espera
 ```
 
-**Quando entra:** só quando o captcha está no caminho crítico e você já procurou — e não achou — um fluxo sem ele. Resolver custa dinheiro e segundos; é a última coisa que você adiciona, não a primeira.
-
-**A pegadinha:** resolver o captcha não conserta uma sessão que o servidor já achou suspeita. Se você está recebendo captcha porque a sua conexão parece de robô, o token resolvido só adia o bloqueio — o problema está uma camada antes, e é o tema do próximo capítulo.
+Resolver o captcha não conserta uma sessão que o servidor já achou suspeita. Se você está apanhando de captcha porque a sua conexão parece de robô, o token só adia o bloqueio, e a causa está uma camada antes.
 
 ## Juntando as peças
 
-Quatro peças. O **cliente HTTP** é o seu chão. A **biblioteca de parsing** vira HTML em dados. O **navegador** é o reforço caro, pra quando há JavaScript de verdade no caminho. E o **serviço de captcha** é o especialista que você chama por último. A arte não é dominar cada uma isoladamente — é escolher a **combinação mínima** que resolve o alvo, e nada além disso.
-
-Com a caixa de ferramentas na mesa, o próximo capítulo encara o primeiro muro de verdade: fazer o servidor te aceitar como um cliente legítimo, da camada de TLS até o formulário de busca.
+São quatro peças, e a regra é usar a combinação mínima que resolve o alvo. O cliente HTTP é o padrão. A biblioteca de parsing entra quando a resposta vem em HTML. O navegador é o reforço caro, reservado pra quando há JavaScript de verdade no caminho. E o serviço de captcha é o especialista que você chama por último, só se não houver desvio.
   </script>
   <script src="render.js"></script>
 </body>
