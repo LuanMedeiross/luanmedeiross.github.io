@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="Conexão & Sessão: fazer o servidor te aceitar como um cliente legítimo." />
   <title>Conexão &amp; Sessão</title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="../../style.css" />
   <script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11/highlight.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
@@ -28,7 +28,6 @@
         <a href="captcha.html">Captcha</a>
         <a href="conteudo-e-escala.html">Conteúdo &amp; Escala</a>
         <a href="longo-prazo.html">Longo prazo</a>
-        <a href="fechamento.html">Fechamento</a>
       </nav>
     </aside>
 
@@ -54,7 +53,7 @@ Antes de entregar uma única linha de HTML, o servidor te avalia: como você abr
 
 Esse é o muro que mais gente bate sem entender. Você manda uma requisição, recebe um `403`, e conclui que precisa de navegador. Mas então abre o site no navegador, na mesma rede, e funciona. Mesma URL, cabeçalhos parecidos. O que muda?
 
-O que muda acontece antes do HTTP. Para falar HTTPS, cliente e servidor primeiro negociam a conexão criptografada, o *handshake* de TLS, e essa negociação tem uma impressão digital: a combinação de versões, cifras e extensões que o seu cliente oferece, o que chamam de JA3/JA4. Cada biblioteca tem uma impressão própria e conhecida, e alguns sistemas de defesa barram tudo que não tem cara de navegador real antes mesmo de olhar o que você pediu.
+O que muda acontece antes do HTTP. Para falar HTTPS, cliente e servidor primeiro negociam a conexão criptografada, o *handshake* de TLS, e essa negociação tem um fingerprint: a combinação de versões, cifras e extensões que o seu cliente oferece, o que chamam de JA3/JA4. Cada biblioteca tem um fingerprint próprio e conhecido, e alguns sistemas de defesa barram tudo que não tem cara de navegador real antes mesmo de olhar o que você pediu.
 
 A saída é usar um cliente HTTP que imita o handshake de um navegador.
 
@@ -70,7 +69,7 @@ Isso vence a checagem do handshake, mas não um desafio que exige executar JavaS
 
 ## A identidade que você declara: os cabeçalhos
 
-Passado o handshake, vêm os cabeçalhos, e o servidor lê todos, inclusive a ordem em que chegam, que também é parte da impressão digital. Um dicionário montado à mão sai numa ordem que nenhum navegador usa, e por isso o mesmo cliente que imita o handshake reproduz aqui o conjunto e a ordem certos. A você cabe completar com os que mudam por requisição (o `Accept` conforme o recurso, o `Referer`, o `X-Requested-With` numa XHR) e manter tudo coerente com o navegador que você diz ser.
+Passado o handshake, vêm os cabeçalhos, e o servidor lê todos, inclusive a ordem em que chegam, que também é parte do fingerprint. Um dicionário montado à mão sai numa ordem que nenhum navegador usa, e por isso o mesmo cliente que imita o handshake reproduz aqui o conjunto e a ordem certos. A você cabe completar com os que mudam por requisição (o `Accept` conforme o recurso, o `Referer`, o `X-Requested-With` numa XHR) e manter tudo coerente com o navegador que você diz ser.
 
 ```python
 # o cliente que imita o navegador já manda o UA e a ordem dos cabeçalhos;
@@ -147,12 +146,10 @@ page.goto("https://exemplo.com")
 
 Manter esse script à mão é uma corrida perdida, porque cada checagem nova pede um remendo; na prática você usa um pacote de stealth pronto, mantido por quem persegue essas detecções. E aqui mora uma armadilha contraintuitiva: alguns desafios procuram justamente o disfarce, detectando as inconsistências que ele cria. Pode ser que, num alvo assim, ligar o disfarce bloqueie e desligá-lo passe, o oposto do que a intuição manda. Trate isso como uma chave que você liga e desliga por alvo, testando, nunca como um "deixa sempre ligado".
 
-## A história precisa fechar
+## Resumo
 
-Repare no fio que costura o capítulo: o servidor raramente te barra por uma coisa só. Ele te barra pela incoerência. Handshake de navegador, cabeçalhos de navegador, os cookies do fluxo, o IP de onde você sai, o comportamento na página: tudo isso conta a mesma história, e quando uma peça destoa, o porteiro percebe. O IP, aliás, carrega reputação própria: um endereço de datacenter já chega marcado como provável robô, um residencial passa por acesso comum. Quando é o seu IP que destoa, seja por estar marcado, seja por sair de um país que não bate com o idioma que você declara, a saída é roteá-lo por um proxy, que faz a requisição sair de outro endereço. Não é item obrigatório: você recorre a ele só quando o IP é o que está te entregando.
-
-Há uma defesa, porém, que coerência nenhuma resolve sozinha: o captcha, que não te lê pelo comportamento da conexão, exige uma prova explícita de que você é humano.
+O servidor te barra pela incoerência, não por uma peça só: handshake de TLS, cabeçalhos coerentes e na ordem certa, os cookies e campos do fluxo, o disfarce do navegador e o IP de saída têm que contar a mesma história. Quando uma destoa, o porteiro percebe.
   </script>
-  <script src="render.js"></script>
+  <script src="../../render.js"></script>
 </body>
 </html>

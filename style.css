@@ -30,10 +30,11 @@ a:hover{text-decoration:underline}
 .topnav a{color:var(--muted)}
 .topnav a:hover{color:var(--text);text-decoration:none}
 
-.wrap{max-width:1140px;margin:0 auto;padding:0 1.5rem;display:grid;grid-template-columns:230px 1fr;gap:3.5rem}
+.wrap{max-width:1140px;margin:0 auto;padding:6rem 1.5rem 0;display:grid;grid-template-columns:230px 1fr;gap:4rem}
 
 .sidebar{
   position:sticky;top:76px;align-self:start;max-height:calc(100vh - 96px);overflow-y:auto;
+  width:270px;
   font-family:'SF Mono',ui-monospace,monospace;font-size:.78rem;padding-bottom:2rem;
 }
 .side-title{text-transform:uppercase;letter-spacing:.14em;color:var(--accent);font-size:.68rem;margin-bottom:.85rem}
@@ -46,7 +47,7 @@ a:hover{text-decoration:underline}
 .parts a{font-size:.82rem}
 .parts a.active{color:var(--accent);border-left-color:var(--accent);font-weight:700}
 
-article{min-width:0;padding:6rem 0 4rem;max-width:720px}
+article{min-width:0;padding:0 0 4rem;max-width:720px}
 #content h1{font-size:clamp(1.9rem,4.5vw,2.6rem);font-weight:800;line-height:1.15;letter-spacing:-.015em;color:var(--heading);margin:0 0 1.2rem}
 #content h2{font-size:1.5rem;font-weight:700;color:var(--heading);margin:2.8rem 0 .4rem;padding-top:1rem;border-top:1px solid var(--border);scroll-margin-top:70px}
 #content h3{font-size:1.2rem;font-weight:700;color:var(--heading);margin:2rem 0 .3rem;scroll-margin-top:70px}
@@ -97,8 +98,7 @@ footer{border-top:1px solid var(--border);text-align:center;padding:2rem;color:v
 .summary-list .pdesc{font-size:.92rem;color:var(--muted)}
 
 @media (max-width:880px){
-  .wrap{grid-template-columns:1fr;gap:0}
+  .wrap{grid-template-columns:1fr;gap:0;padding-top:5rem}
   .sidebar{display:none}
-  article{padding-top:5rem}
   body{font-size:17px}
 }

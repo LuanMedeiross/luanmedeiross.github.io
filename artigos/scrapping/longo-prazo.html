@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="Scraping a longo prazo: detectar a quebra antes de gravar lixo." />
   <title>Scraping a longo prazo</title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="../../style.css" />
   <script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11/highlight.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
@@ -28,7 +28,6 @@
         <a href="captcha.html">Captcha</a>
         <a href="conteudo-e-escala.html">Conteúdo &amp; Escala</a>
         <a href="longo-prazo.html" class="active">Longo prazo</a>
-        <a href="fechamento.html">Fechamento</a>
       </nav>
     </aside>
 
@@ -36,7 +35,7 @@
       <div id="content">Carregando…</div>
       <nav class="prevnext">
         <a href="conteudo-e-escala.html">← Conteúdo &amp; Escala</a>
-        <a class="next" href="fechamento.html">Fechamento →</a>
+        <a class="next" href="index.html">Voltar ao sumário</a>
       </nav>
     </article>
   </div>
@@ -126,8 +125,10 @@ conferir_contra_gabarito(dados)   # PASS/FAIL sem ir à produção
 
 Essa separação, um parser puro, sem efeitos colaterais, é a decisão que torna todo o resto barato: testável offline, diagnosticável, à prova de regressão.
 
-Com isso fecha o arsenal de longo prazo: detectar a quebra antes de ela contaminar a base, e consertar de graça.
+## Resumo
+
+O scraper falha calado quando o site muda, então o trabalho é tornar a quebra barulhenta: assinatura versionada para pegar "a estrutura mudou", gabarito de presença e forma para pegar "parou de extrair", e replay offline para consertar de graça.
   </script>
-  <script src="render.js"></script>
+  <script src="../../render.js"></script>
 </body>
 </html>

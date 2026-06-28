@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="Como pensar um scraper: a decisão que vem antes do código." />
   <title>Como pensar um scraper</title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="../../style.css" />
   <script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11/highlight.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
@@ -28,7 +28,6 @@
         <a href="captcha.html">Captcha</a>
         <a href="conteudo-e-escala.html">Conteúdo &amp; Escala</a>
         <a href="longo-prazo.html">Longo prazo</a>
-        <a href="fechamento.html">Fechamento</a>
       </nav>
     </aside>
 
@@ -104,10 +103,10 @@ alvo
  ├─ 4. extração  →  veja o HTML real; ancore por rótulo, sufixo ou formato
  │       └─ parser que dobra: isola item, tolera ausência, ignora posição
  │
- ├─ 5. escala  →  concorrência como sonda; o bloqueio aparece sob carga
- │       ├─ retry com espera crescente (1s, 2s, 4s)
+ ├─ 5. escala  →  concorrência revela o muro; aparece sob carga
+ │       ├─ retry com backoff (1s, 2s, 4s)
  │       ├─ rotação de IP: manual (lista) ou proxy rotativo
- │       └─ disjuntor: N falhas seguidas → aborta o lote
+ │       └─ circuit breaker: N falhas seguidas → aborta o lote
  │
  └─ 6. manutenção  →  assuma que vai quebrar calado; construa o alarme
          ├─ assinatura versionada (1 GET) → diff estrutural
@@ -140,16 +139,16 @@ Antes de qualquer loop, extraia um resultado na mão. Descubra a requisição ex
 Olhe o HTML real e escolha a âncora pela volatilidade do que você vê. Id gerado a cada deploy você não prende: ancora no sufixo estável dele, ou troca o id pelo rótulo de texto ao lado do campo, que quase não muda porque um humano precisa lê-lo. Sem rótulo confiável, sobra a regex pelo formato do valor. E não pegue cada item por um id próprio: ancore no container estável, a tabela, e itere as linhas lendo a coluna pelo cabeçalho, nunca pela posição. Por fim, tolere campo ausente, para um registro torto virar aviso e não a queda do lote.
 ### Fase 5 · Escala e robustez
 
-Requisições em escala causam diversos bloqueios (Rate Limit, WAF, sobrecarga do servidor), e muitos só aparecem sob carga. Suba a concorrência aos poucos, usando ela como sonda: melhor o alvo te barrar no teste do que em produção. Quando o bloqueio vier, segure o tranco com retry de espera crescente para falhas passageiras e um disjuntor que aborta o lote quando as falhas viram regra. E o óbvio: não dispare cinquenta threads de cara nem insista contra um muro que não vai ceder.
+Requisições em escala causam diversos bloqueios (rate limit, WAF, sobrecarga do servidor), e muitos só aparecem sob carga. Suba a concorrência aos poucos, e use ela para expor o bloqueio: melhor o alvo te barrar no teste do que em produção. Quando o bloqueio vier, segure o tranco com retry e backoff para falhas passageiras e um circuit breaker que aborta o lote quando as falhas viram regra. E o óbvio: não dispare cinquenta threads de cara nem insista contra um muro que não vai ceder.
 
 ### Fase 6 · Manutenção
 
 É a fase que separa um script de um sistema, e a mais ignorada. Um scraper raramente morre com erro limpo. Ele falha calado: o site muda, o parser passa a achar nada, e a base enche de registro vazio sem nenhum aviso. Você só descobre muito tempo depois. O trabalho aqui é ter um alarme de quebra, porque a falha de um scraper é silenciosa por natureza. Nunca confie no "rodou ontem, então roda hoje".
 
-## O resumo de bolso
+## Resumo
 
-Antes da primeira linha de um scraper: abra o DevTools, não o editor, e leia a rede. Responda a pergunta principal (API ou JavaScript), que é quem escolhe a ferramenta. Prove o caminho com um Copy as cURL antes de codar. Veja o HTML real antes do parser. Faça um resultado funcionar antes de fazer mil. E planeje o alarme de quebra desde já, porque ele vai quebrar, e calado.
+Antes de codar, leia a rede no DevTools: a resposta a "dado pronto ou montado por JavaScript?" escolhe a ferramenta. Prove o caminho com um Copy as cURL, veja o HTML real, e faça um resultado sair antes de mil, lembrando que ele vai quebrar calado.
   </script>
-  <script src="render.js"></script>
+  <script src="../../render.js"></script>
 </body>
 </html>
