@@ -1,0 +1,94 @@
+/* home.css — portfólio (tema sépia). Reaproveita os tokens de style.css;
+   carregue style.css ANTES deste arquivo. */
+
+:root{
+  /* severidade dos cards, harmonizada ao sépia */
+  --sev-crit:#9a3b2a; --sev-high:#b5651d; --sev-med:#1f6f78;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --sev-crit:#e08a5a; --sev-high:#d9913f; --sev-med:#6fb7bf;
+  }
+}
+
+/* ── NAV ── */
+nav{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--border);height:56px;
+  display:flex;align-items:center;justify-content:space-between;padding:0 2rem;
+}
+.nav-brand{font-family:'SF Mono',ui-monospace,monospace;font-size:.9rem;color:var(--accent);font-weight:700}
+.nav-links{display:flex;gap:1.5rem;list-style:none;font-family:'SF Mono',ui-monospace,monospace}
+.nav-links a{color:var(--muted);font-size:.82rem;transition:color .2s}
+.nav-links a:hover{color:var(--text);text-decoration:none}
+
+/* ── LAYOUT ── */
+.container{max-width:860px;margin:0 auto;padding:0 1.5rem}
+section{padding:5rem 0}
+.section-label{font-family:'SF Mono',ui-monospace,monospace;font-size:.72rem;color:var(--accent);text-transform:uppercase;letter-spacing:.12em;margin-bottom:.5rem}
+h2{font-size:1.75rem;font-weight:800;color:var(--heading);margin-bottom:2rem;letter-spacing:-.01em}
+
+/* ── HERO ── */
+#hero{min-height:100vh;display:flex;align-items:center;padding-top:56px}
+.hero-inner{max-width:730px}
+.hero-tag{display:inline-block;background:var(--surface);border:1px solid var(--border);color:var(--accent);font-family:'SF Mono',ui-monospace,monospace;font-size:.8rem;padding:3px 10px;border-radius:4px;margin-bottom:1.5rem}
+.hero-name{font-size:clamp(2.2rem,6vw,3.5rem);font-weight:800;line-height:1.1;margin-bottom:1rem;letter-spacing:-.02em;color:var(--heading)}
+.hero-name span{color:var(--accent)}
+.hero-subtitle{font-size:1.15rem;color:var(--muted);margin-bottom:2rem;max-width:520px}
+.hero-cta{display:flex;gap:1rem;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:.4rem;padding:10px 20px;border-radius:var(--radius);font-size:.875rem;font-weight:600;transition:opacity .2s,transform .15s;cursor:pointer}
+.btn:hover{opacity:.9;transform:translateY(-1px);text-decoration:none}
+.btn-primary{background:var(--accent);color:var(--bg)}
+.btn-secondary{background:var(--surface);color:var(--text);border:1px solid var(--border)}
+.hero-scroll{margin-top:4rem;display:flex;align-items:center;gap:.75rem;color:var(--muted);font-family:'SF Mono',ui-monospace,monospace;font-size:.8rem}
+.hero-scroll-line{width:40px;height:1px;background:var(--border)}
+
+/* ── ABOUT ── */
+#about .about-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem}
+.about-text{color:var(--text);line-height:1.8}
+.about-text p + p{margin-top:1rem}
+.about-text strong{color:var(--heading)}
+.about-stats{display:flex;flex-direction:column;gap:1rem}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem 1.5rem}
+.stat-number{font-size:1.75rem;font-weight:800;color:var(--accent);font-family:'SF Mono',ui-monospace,monospace}
+.stat-label{font-size:.8rem;color:var(--muted);margin-top:2px}
+
+/* ── CARD de artigo / write-up (reutilizado pela seção de Artigos) ── */
+.writeup-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem;transition:border-color .2s,transform .15s;display:flex;flex-direction:column;gap:.75rem}
+.writeup-card:hover{border-color:var(--accent);transform:translateY(-2px)}
+.writeup-header{display:flex;justify-content:space-between;align-items:flex-start;gap:.75rem}
+.writeup-type{font-family:'SF Mono',ui-monospace,monospace;font-size:.8rem;font-weight:700;color:var(--heading)}
+.sev{font-size:.7rem;font-weight:700;padding:2px 8px;border-radius:3px;font-family:'SF Mono',ui-monospace,monospace;text-transform:uppercase;letter-spacing:.05em;border:1px solid currentColor}
+.sev-critical{color:var(--sev-crit)}
+.sev-high{color:var(--sev-high)}
+.sev-medium{color:var(--sev-med)}
+.writeup-desc{font-size:.875rem;color:var(--muted);flex:1}
+.writeup-footer{display:flex;justify-content:space-between;align-items:center;font-size:.78rem;color:var(--muted);border-top:1px solid var(--border);padding-top:.75rem;gap:.75rem}
+.writeup-link{color:var(--link);font-size:.78rem}
+.mono{font-family:'SF Mono',ui-monospace,monospace}
+
+/* ── ARTIGOS ── */
+#artigos .articles-grid{display:flex;flex-direction:column;gap:1rem}
+a.writeup-card{color:inherit}
+a.writeup-card:hover{text-decoration:none}
+.writeup-tags{display:flex;gap:.4rem;flex-wrap:wrap}
+.writeup-tags .tool-tag{font-family:'SF Mono',ui-monospace,monospace;font-size:.7rem;color:var(--muted);background:var(--bg);border:1px solid var(--border);padding:2px 8px;border-radius:3px}
+
+/* ── CONTACT ── */
+#contact{border-top:1px solid var(--border)}
+.contact-inner{text-align:center;max-width:500px;margin:0 auto}
+.contact-inner h2{margin-bottom:.75rem}
+.contact-sub{color:var(--muted);margin-bottom:2rem}
+.contact-links{display:flex;justify-content:center;gap:1rem;flex-wrap:wrap}
+
+/* ── DIVIDER ── */
+.divider{height:1px;background:var(--border);margin:0}
+
+/* ── RESPONSIVE ── */
+@media (max-width:640px){
+  #about .about-grid{grid-template-columns:1fr}
+  .nav-links{display:none}
+  h2{font-size:1.4rem}
+  nav{padding:0 1.25rem}
+}

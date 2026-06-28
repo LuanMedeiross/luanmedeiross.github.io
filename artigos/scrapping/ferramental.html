@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="O ferramental: as quatro peças que montam qualquer scraper." />
   <title>O ferramental</title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="../../style.css" />
   <script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11/highlight.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
@@ -28,7 +28,6 @@
         <a href="captcha.html">Captcha</a>
         <a href="conteudo-e-escala.html">Conteúdo &amp; Escala</a>
         <a href="longo-prazo.html">Longo prazo</a>
-        <a href="fechamento.html">Fechamento</a>
       </nav>
     </aside>
 
@@ -81,9 +80,9 @@ O jeito como você escreve o seletor decide se o parser sobrevive ao próximo de
 
 ## O navegador automatizado
 
-Um navegador de verdade, dirigido por código. Ele carrega a página, executa o JavaScript, clica, preenche e espera o conteúdo aparecer, tudo que o cliente HTTP não faz. O preço é alto: ordens de magnitude mais lento e mais pesado, e mais fácil de detectar. Por isso é o último recurso, e entra só quando o conteúdo é montado por JavaScript, quando há um desafio de página inteira, ou quando um captcha invisível reprova um ambiente sem tela.
+Um navegador de verdade, dirigido por código. Ele carrega a página, executa o JavaScript, clica, preenche e espera o conteúdo aparecer, tudo que o cliente HTTP não faz. O preço é alto: ordens de magnitude mais lento e mais pesado, e mais fácil de detectar. Por isso é o último recurso, e entra só quando o conteúdo é montado por JavaScript, quando há um desafio de página inteira, ou quando um captcha invisível reprova um ambiente headless.
 
-Esse navegador roda em dois modos. No headless ele faz tudo (carrega a página, executa o JavaScript, monta o DOM) sem abrir uma janela visível, o que o deixa bem mais leve e rápido. É o modo certo para o caso comum: um site que só monta o conteúdo por JavaScript, mas não inspeciona quem está acessando. Quando o alvo passa a checar o ambiente (procurar marcas de automação, exigir comportamento humano, calcular um score de confiança), o headless costuma ser detectado, e aí você sobe para um navegador visível, com janela, rodando como o de uma pessoa. Comece sempre pelo headless; só troque pelo visível quando o site provar que checa.
+Esse navegador roda em dois modos. No headless ele faz tudo (carrega a página, executa o JavaScript, monta o DOM) sem abrir uma janela visível, o que o deixa bem mais leve e rápido. É o modo certo para o caso comum: um site que só monta o conteúdo por JavaScript, mas não inspeciona quem está acessando. Quando o alvo passa a checar o ambiente (procurar marcas de automação, exigir comportamento humano, calcular um score de confiança), o headless costuma ser detectado, e aí você sobe para um navegador visível (headed), com janela, rodando como o de uma pessoa. Comece sempre pelo headless; só troque pelo visível quando o site provar que checa.
 
 ```python
 from playwright.sync_api import sync_playwright
@@ -115,10 +114,10 @@ token = resultado["code"]          # injeta no campo/parâmetro que o site esper
 
 Resolver o captcha não conserta uma sessão que o servidor já achou suspeita. Se você está apanhando de captcha porque a sua conexão parece de robô, o token só adia o bloqueio, e a causa está uma camada antes.
 
-## Juntando as peças
+## Resumo
 
-São quatro peças, e a regra é usar a combinação mínima que resolve o alvo. O cliente HTTP é o padrão. A biblioteca de parsing entra quando a resposta vem em HTML. O navegador é o reforço caro, reservado pra quando há JavaScript de verdade no caminho. E o serviço de captcha é o especialista que você chama por último, só se não houver desvio.
+São quatro peças: cliente HTTP como padrão, biblioteca de parsing quando a resposta vem em HTML, navegador só quando há JavaScript de verdade, e serviço de captcha por último. Use a combinação mínima que resolve o alvo.
   </script>
-  <script src="render.js"></script>
+  <script src="../../render.js"></script>
 </body>
 </html>

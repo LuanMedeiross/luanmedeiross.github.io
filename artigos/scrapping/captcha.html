@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="Captcha: detectar o tipo, resolver com serviço externo, e o caso extremo." />
+  <meta name="description" content="Captcha: detectar o tipo, resolver pelo caminho que ele pede (serviço, local ou navegador), e o caso extremo." />
   <title>Captcha</title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="../../style.css" />
   <script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11/highlight.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
@@ -28,7 +28,6 @@
         <a href="captcha.html" class="active">Captcha</a>
         <a href="conteudo-e-escala.html">Conteúdo &amp; Escala</a>
         <a href="longo-prazo.html">Longo prazo</a>
-        <a href="fechamento.html">Fechamento</a>
       </nav>
     </aside>
 
@@ -99,6 +98,30 @@ texto = solver.normal("captcha.png")["code"]                            # imagem
 # o token/texto entra no POST como se você tivesse resolvido na tela
 ```
 
+## Resolveu uma vez? Reuse a sessão validada
+
+Resolver custa, então um token resolvido tem que render. Muitos sites validam o captcha uma vez e, daí em diante, confiam na sessão (no cookie) por um tempo ou por um número de consultas. Quem resolve o captcha a cada documento paga solve à toa. O padrão que economiza é resolver uma vez, marcar a sessão como validada, e seguir consultando com ela; só quando o site repõe o desafio (a sessão expirou ou foi derrubada) é que você resolve de novo.
+
+```python
+def garantir_sessao(sessao):
+    if getattr(sessao, "_validada", False):
+        return                                 # já validou: reusa o cookie
+    token = resolver_captcha(...)              # gasta 1 solve
+    sessao.post(URL_VALIDAR, data={"token": token})
+    sessao._validada = True
+
+def consultar(sessao, doc):
+    garantir_sessao(sessao)
+    r = sessao.post(URL_BUSCA, data={"doc": doc})
+    if "cf-turnstile" in r.text:               # o site repôs o desafio: revalida
+        sessao._validada = False
+        garantir_sessao(sessao)
+        r = sessao.post(URL_BUSCA, data={"doc": doc})
+    return r
+```
+
+Quanto mais documentos por sessão validada, menor o custo por resultado. O cuidado é perceber a reapresentação do desafio: se você não nota que a sessão caiu, passa a mandar consultas que o site recusa achando que está tudo certo.
+
 ## Captcha de imagem estática: às vezes nem precisa de serviço
 
 Para o captcha mais simples, aquela imagem estática com letras ou números distorcidos, você nem sempre precisa de um serviço pago. Dá pra resolver localmente com visão computacional: um modelo de OCR roda na sua própria máquina, lê a imagem e devolve o texto. É barato (sem custo por resolução) e rápido (sem a ida e volta a um serviço externo), e pra um volume grande de um mesmo captcha de imagem compensa muito.
@@ -112,6 +135,30 @@ texto = "".join(reader.readtext("captcha.png", detail=0))
 ```
 
 Vale só pros simples. Captcha de widget, "selecione as imagens com…", ou o que avalia comportamento não caem por OCR. Pra esses, é serviço (ou pior, o caso extremo lá embaixo).
+
+## Captcha de proof-of-work: você resolve sem serviço e sem navegador
+
+Nem todo captcha pede um humano. Existe uma família que, em vez de "selecione as imagens" ou "arraste a peça", manda o seu cliente provar que gastou trabalho de processador: o servidor envia um sal, um hash-alvo e um teto, e cabe a você achar o número que, junto do sal, gera aquele hash. É proof-of-work, e não há desafio humano para terceirizar. Você reproduz na sua máquina o mesmo laço que o JavaScript do site faria.
+
+```python
+import hashlib, base64, json
+
+# captcha de proof-of-work (ALTCHA e parecidos): o desafio traz o sal,
+# o hash-alvo e o teto de busca; ache o n cujo sha256(sal+n) bate com o alvo
+desafio = sessao.get("https://exemplo.com/captcha/desafio").json()
+sal, alvo, teto = desafio["salt"], desafio["challenge"], desafio["maxnumber"]
+
+prova = None
+for n in range(teto + 1):
+    if hashlib.sha256(f"{sal}{n}".encode()).hexdigest() == alvo:
+        solucao = {"algorithm": desafio["algorithm"], "challenge": alvo,
+                   "number": n, "salt": sal, "signature": desafio["signature"]}
+        prova = base64.b64encode(json.dumps(solucao).encode()).decode()
+        break
+# 'prova' entra no POST onde o site espera, como se o widget tivesse resolvido
+```
+
+O custo é o do laço: teto pequeno resolve em milissegundos, e como roda local não há ida e volta a serviço nem gasto por resolução. O teto regula a dificuldade: quanto maior, mais processamento o servidor te obriga a gastar por requisição.
 
 ## A regra de ouro: não declare "irresolvível" cedo demais
 
@@ -149,17 +196,37 @@ token = solver.turnstile(sitekey=sitekey, url=url,
                          proxy={"type": "HTTP", "uri": "user:senha@host:porta"})["code"]
 ```
 
+## O captcha invisível por score: deixe o navegador gerar o token
+
+Há um tipo de captcha invisível que não te entrega desafio nenhum para resolver: ele observa a sessão em segundo plano e devolve um score de confiança em vez de um sim ou não. Não tem imagem, não tem widget para clicar, e não tem token para pedir a um serviço, porque o token que vale é o que a própria página gera sozinha, de forma contínua. Um token injetado de fora costuma pontuar mal e ser recusado. O que funciona é deixar um navegador de verdade gerar o token e esperar ele aparecer antes de enviar o formulário. E tem que ser um navegador visível (headed), porque o modo headless costuma pontuar baixo e a validação falha.
+
+```python
+# captcha invisível por score (reCAPTCHA v3 e afins): não há nada a "resolver".
+# A página enche um campo escondido com o token, de forma assíncrona; rode um
+# navegador REAL e espere o campo encher antes de enviar.
+page.goto(url)
+page.fill("#campo_documento", doc)
+page.wait_for_function(
+    "() => { const e = document.getElementById('token_resposta');"
+    " return e && e.value && e.value.length > 50; }",
+    timeout=30000,
+)
+page.click("#botao_buscar")   # enviar antes do token: campo vazio, e o site recusa
+```
+
+O detalhe que pega é o tempo: o campo do token só enche depois que a página carrega, então enviar cedo manda um campo vazio e o site recusa sem dizer por quê. Espere o token existir no campo, não só a página ter carregado.
+
 ## O caso extremo: quando nem o captcha resolvido basta
 
-Existe uma classe de sites realmente blindados onde o problema não é (só) o captcha. A página calcula um score de confiança do seu navegador e do seu comportamento e, mesmo com o captcha resolvido, devolve `false` e te bloqueia. Mudar cabeçalhos, locale, stealth, nada move o ponteiro, porque o muro não é o desafio: é "isto não parece uma pessoa de verdade num navegador de verdade".
+Tem um degrau acima desse. Existe uma classe de sites realmente blindados onde nem o navegador de verdade basta: o score pesa também o seu comportamento e, mesmo com o token gerado na própria página, o site devolve `false` e te bloqueia. Mudar cabeçalhos, locale, stealth, nada move o ponteiro, porque o muro não é o desafio: é "isto não parece uma pessoa de verdade num navegador de verdade".
 
 Contra esse tipo de barreira, injetar um token resolvido de fora não soma confiança nenhuma. O que ajuda é resolver o captcha por interação real dentro do próprio navegador, com uma extensão como a do NopeCHA: a resolução acontece como a de um usuário comum e conta pontos no score, em vez de parecer um token vindo de fora. Some a isso comportamento de gente de verdade, o mouse se movendo até os botões e cliques reais, e o score sobe o suficiente para passar. É lento e quebradiço: depende da posição dos elementos na tela, então um ajuste de layout já o derruba.
 
 E continua valendo a regra que costura este capítulo inteiro: resolver o captcha não conserta uma sessão que o servidor já achou suspeita. Se você apanha de captcha porque a sua conexão parece de robô, o token só adia o bloqueio, a causa está uma camada antes.
 
-## O resumo
+## Resumo
 
-O captcha parece o muro mais alto e costuma ser o mais mecânico: identifique o tipo, confirme que ele está ligado, entregue os parâmetros certos a um serviço, injete o token. Antes de cravar "impossível", confirme que passou os parâmetros opcionais do desafio e que o identificador sai do HTML em runtime. É quase sempre aí, num parâmetro faltando, que mora o "irresolvível".  </script>
-  <script src="render.js"></script>
+Captcha é mais mecânico que assustador: identifique o tipo, confirme que está ligado, e resolva pelo caminho que ele pede (serviço, máquina local, ou navegador real para o invisível por score). Antes de cravar "impossível", cheque os parâmetros opcionais e o identificador lido em runtime.</script>
+  <script src="../../render.js"></script>
 </body>
 </html>
