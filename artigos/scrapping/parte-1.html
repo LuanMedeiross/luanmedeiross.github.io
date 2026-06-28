@@ -55,7 +55,7 @@ A primeira ferramenta de um scraper é o DevTools do navegador, não o editor. A
 
 Quem começa escreve código contra o site que está vendo na tela: o HTML renderizado. O problema é que isso quase nunca é o que chega pela rede. O navegador baixa o HTML, executa o JavaScript, faz mais dez requisições por baixo e monta a página. Quando você inspeciona um elemento, está vendo o resultado final, não a matéria-prima que o servidor mandou. Escreva um scraper em cima disso e vai perder horas tentando entender por que o seu código recebe um HTML vazio enquanto o navegador mostra a tabela cheia.
 
-A regra é simples: mapeie o site antes de codar. Cinco minutos lendo as requisições economizam cinco horas no escuro.
+A regra é simples: mapeie o site antes de codar. Esses minutos na aba Network dizem se o dado vem pronto ou é montado por JavaScript, e é isso que escolhe a ferramenta.
 
 ## A decisão que define o projeto inteiro
 
@@ -77,7 +77,7 @@ Confirme antes de codar: botão direito na requisição, "Copy as cURL", e rode 
 
 ### A regra de ouro
 
-Você não escolhe a ferramenta, o alvo escolhe por você, e o DevTools conta a escolha. O navegador é mais lento, mais frágil e mais fácil de detectar que um cliente HTTP, então ele entra só quando os outros dois casos não dão conta.
+A ferramenta sai do que você viu na rede, não da sua preferência: o navegador é mais lento, mais frágil e mais fácil de detectar que um cliente HTTP, então entra só quando os outros dois casos não dão conta.
 
 ## Metodologia
 
@@ -97,10 +97,11 @@ alvo
  │                   comportamento/página inteira → navegador
  │
  ├─ 3. reproduzir  →  faça 1 resultado sair na mão, antes do loop
- │       └─ a porta, se o servidor barrar: fingerprint de TLS, coerência de
- │          header, cookies + token + ordem do fluxo, proxy se o IP destoar
+ │       └─ a porta, se o servidor barrar: fingerprint de TLS, cabeçalhos
+ │          coerentes e ordenados, campos do form + cookies, disfarce do
+ │          navegador, proxy se o IP destoar
  │
- ├─ 4. extração  →  veja o HTML real; ancore no estável, nunca no volátil
+ ├─ 4. extração  →  veja o HTML real; ancore por rótulo, sufixo ou formato
  │       └─ parser que dobra: isola item, tolera ausência, ignora posição
  │
  ├─ 5. escala  →  concorrência como sonda; o bloqueio aparece sob carga
@@ -111,8 +112,7 @@ alvo
  └─ 6. manutenção  →  assuma que vai quebrar calado; construa o alarme
          ├─ assinatura versionada (1 GET) → diff estrutural
          ├─ gabarito comportamental: presença + forma do valor
-         ├─ replay offline do parser (HTML salvo, sem rede)
-         └─ persistência idempotente + retomada
+         └─ replay offline do parser (HTML salvo, sem rede)
 ```
 
 Esse é o mapa. O resto desta parte abre cada etapa dele, uma a uma.
@@ -137,8 +137,7 @@ Antes de qualquer loop, extraia um resultado na mão. Descubra a requisição ex
 
 ### Fase 4 · Extração
 
-A lei mais importante: veja o HTML real antes de escrever o parser. E o corolário que custa caro: mesma plataforma não é o mesmo DOM. Dois sites construídos sobre o mesmo CMS podem servir o mesmo dado em estruturas diferentes: num, um subcampo vem aninhado na linha; no outro, numa linha separada. Um parser reaproveitado por suposição traz o campo errado sem reclamar. Nunca reúse um parser sem antes comparar o HTML dos dois. Na hora de extrair, ancore no que é estável, nunca no que o site troca a cada deploy, e tolere campo ausente em vez de explodir o lote por causa de um registro malformado.
-
+Olhe o HTML real e escolha a âncora pela volatilidade do que você vê. Id gerado a cada deploy você não prende: ancora no sufixo estável dele, ou troca o id pelo rótulo de texto ao lado do campo, que quase não muda porque um humano precisa lê-lo. Sem rótulo confiável, sobra a regex pelo formato do valor. E não pegue cada item por um id próprio: ancore no container estável, a tabela, e itere as linhas lendo a coluna pelo cabeçalho, nunca pela posição. Por fim, tolere campo ausente, para um registro torto virar aviso e não a queda do lote.
 ### Fase 5 · Escala e robustez
 
 Requisições em escala causam diversos bloqueios (Rate Limit, WAF, sobrecarga do servidor), e muitos só aparecem sob carga. Suba a concorrência aos poucos, usando ela como sonda: melhor o alvo te barrar no teste do que em produção. Quando o bloqueio vier, segure o tranco com retry de espera crescente para falhas passageiras e um disjuntor que aborta o lote quando as falhas viram regra. E o óbvio: não dispare cinquenta threads de cara nem insista contra um muro que não vai ceder.
@@ -149,7 +148,7 @@ Requisições em escala causam diversos bloqueios (Rate Limit, WAF, sobrecarga d
 
 ## O resumo de bolso
 
-Antes da primeira linha de um scraper: abra o DevTools, não o editor, e leia a rede. Responda a pergunta principal (API ou JavaScript), que é quem escolhe a ferramenta. Prove o caminho com um Copy as cURL antes de codar. Veja o HTML real antes do parser, lembrando que mesma plataforma não é o mesmo DOM. Faça um resultado funcionar antes de fazer mil. E planeje o alarme de quebra desde já, porque ele vai quebrar, e calado.
+Antes da primeira linha de um scraper: abra o DevTools, não o editor, e leia a rede. Responda a pergunta principal (API ou JavaScript), que é quem escolhe a ferramenta. Prove o caminho com um Copy as cURL antes de codar. Veja o HTML real antes do parser. Faça um resultado funcionar antes de fazer mil. E planeje o alarme de quebra desde já, porque ele vai quebrar, e calado.
   </script>
   <script src="render.js"></script>
 </body>

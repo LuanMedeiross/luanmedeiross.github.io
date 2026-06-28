@@ -70,60 +70,88 @@ Isso vence a checagem do handshake, mas não um desafio que exige executar JavaS
 
 ## A identidade que você declara: os cabeçalhos
 
-Passado o handshake, vêm os cabeçalhos HTTP, e o servidor lê todos. Falta de `User-Agent`, um `User-Agent` genérico, ou uma ordem de cabeçalhos que não bate com a do navegador que você diz ser: qualquer um desses te entrega. Pior é a incoerência, tipo dizer que é um navegador no cabeçalho e ter o handshake de outra coisa. A regra é contar uma história consistente, com cabeçalhos coerentes com o cliente que você está imitando.
+Passado o handshake, vêm os cabeçalhos, e o servidor lê todos, inclusive a ordem em que chegam, que também é parte da impressão digital. Um dicionário montado à mão sai numa ordem que nenhum navegador usa, e por isso o mesmo cliente que imita o handshake reproduz aqui o conjunto e a ordem certos. A você cabe completar com os que mudam por requisição (o `Accept` conforme o recurso, o `Referer`, o `X-Requested-With` numa XHR) e manter tudo coerente com o navegador que você diz ser.
 
 ```python
+# o cliente que imita o navegador já manda o UA e a ordem dos cabeçalhos;
+# você completa com os que mudam por requisição
 headers = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                  "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Upgrade-Insecure-Requests": "1",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "same-origin",
     "Referer": "https://exemplo.com/",
 }
 r = requests.get(url, headers=headers, impersonate="chrome")
+
+# numa chamada XHR, o Accept e o X-Requested-With mudam:
+xhr = {"Accept": "application/json, text/javascript, */*; q=0.01",
+       "X-Requested-With": "XMLHttpRequest", "Referer": "https://exemplo.com/busca"}
 ```
 
 Um detalhe que poupa dor de cabeça: centralize esses valores num lugar só. `User-Agent` copiado em dez arquivos vira dez versões diferentes com o tempo, e basta uma destoar pra você ter um bug que só aparece "às vezes".
 
 ## O caminho e o estado: cookies, tokens e a ordem das coisas
 
-Muitos sites não aceitam um POST direto no endereço do resultado. Eles exigem que você tenha passado pelo caminho: um cookie que só é setado na página inicial, um token de estado escondido no HTML do formulário, um identificador de sessão, um `Referer` que faça sentido. Pular etapas devolve um formulário vazio ou um erro educado, e você perde horas achando que o problema é outro. A solução é reproduzir o caminho de um humano: primeiro o GET da página inicial, que te dá os cookies e o token embutido, depois o POST reusando tudo.
+Muitos sites não aceitam um POST direto no endereço do resultado. Eles exigem que você tenha passado pelo caminho: um cookie que só é setado na página inicial, um token de estado escondido no HTML do formulário, um identificador de sessão, um `Referer` que faça sentido. Pular etapas devolve um formulário vazio ou um erro educado, e você perde horas achando que o problema é outro. A solução é reproduzir o caminho de um humano: o GET da página inicial te dá os cookies e os campos escondidos do formulário, e o POST reenvia todos eles, não só o que você acha que importa.
 
 ```python
 s = requests.Session(impersonate="chrome")
 
-# 1) GET inicial: a sessão guarda os cookies, e o HTML traz o token de estado
+# 1) GET inicial: a sessão guarda os cookies (um id de sessão tipo jsessionid)
 home = s.get("https://exemplo.com/busca")
-token = BeautifulSoup(home.text, "html.parser").select_one("input[name=_token]")["value"]
+soup = BeautifulSoup(home.text, "html.parser")
 
-# 2) POST reusando cookies (a sessão cuida) + o token + um Referer coerente
-r = s.post("https://exemplo.com/busca",
-           data={"_token": token, "q": "termo"},
+# 2) colha TODOS os hidden do form (_csrf, javax.faces.ViewState, etc.),
+#    não só "o token": eles costumam ser exigidos juntos no POST
+form = {i["name"]: i.get("value", "") for i in soup.select("form input[name]")}
+form["q"] = "termo"                       # seus parâmetros por cima
+
+# 3) POST reusando cookies (a sessão cuida) + os hidden + Referer coerente
+r = s.post("https://exemplo.com/busca", data=form,
            headers={"Referer": "https://exemplo.com/busca"})
 ```
 
-Se o token não está embutido no HTML, mas é gerado por JavaScript no navegador, o GET não te entrega ele pronto, e aí você cai no caso de precisar executar JS.
+Onde o estado mora varia: um campo escondido de name fixo, um campo gerado pelo framework, um cookie que a sessão já guarda, ou um valor que só aparece depois de uma XHR intermediária. Por isso reenviar o formulário inteiro é mais seguro que caçar um campo só. E se o valor é gerado por JavaScript no navegador, o GET não te entrega ele pronto, e aí você cai no caso de precisar executar JS.
 
 ## Quando o navegador é inevitável: o disfarce
 
-Às vezes não tem escapatória e você vai pro navegador automatizado. Só que ele também tem marcas que o entregam: uma propriedade que anuncia "estou sob automação", uma lista de plugins vazia, a ausência de objetos que um navegador comum sempre tem. Scripts anti-bot leem exatamente isso. A resposta é injetar, antes de a página carregar seus scripts, um trecho que sobrescreve essas marcas pra você parecer um navegador comum.
+Às vezes não tem escapatória e você vai pro navegador automatizado, e ele carrega marcas que o entregam. A mais conhecida é a propriedade que anuncia "estou sob automação", mas a superfície é bem maior: a lista de idiomas, o fornecedor da placa de vídeo via WebGL, o fuso horário, os plugins, a resposta a consultas de permissão. A resposta é injetar, antes de a página rodar os scripts dela, um trecho que normaliza essas marcas para as de um navegador comum, e mantê-las coerentes entre si: o idioma e o fuso têm que bater com o IP de onde você sai, e o user agent do script com o dos cabeçalhos e do handshake.
 
 ```python
 # injeta o disfarce ANTES de a página rodar o JavaScript dela
 page.add_init_script("""
-  Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-  Object.defineProperty(navigator, 'plugins',   { get: () => [1, 2, 3] });
-  window.chrome = { runtime: {} };
+  Object.defineProperty(navigator, 'webdriver',  { get: () => false });
+  Object.defineProperty(navigator, 'languages',  { get: () => ['pt-BR','pt','en-US'] });
+  window.chrome = window.chrome || { runtime: {} };
+  // plugins plausíveis, não uma lista vazia
+  Object.defineProperty(navigator, 'plugins', { get: () => [{ name: 'Chrome PDF Plugin' }] });
+  // WebGL: fornecedor/renderer de uma GPU real, não o de software headless
+  const gp = WebGLRenderingContext.prototype.getParameter;
+  WebGLRenderingContext.prototype.getParameter = function (p) {
+    if (p === 0x9245) return 'Intel Inc.';               // UNMASKED_VENDOR
+    if (p === 0x9246) return 'Intel Iris OpenGL Engine';  // UNMASKED_RENDERER
+    return gp.call(this, p);
+  };
+  // fuso coerente com o IP de saída
+  const ro = Intl.DateTimeFormat.prototype.resolvedOptions;
+  Intl.DateTimeFormat.prototype.resolvedOptions = function () {
+    const r = ro.call(this); r.timeZone = 'America/Sao_Paulo'; return r;
+  };
 """)
 page.goto("https://exemplo.com")
 ```
 
-E aqui mora uma armadilha contraintuitiva: alguns desafios procuram justamente o disfarce, detectando quem está tentando se esconder. Pode ser que, num alvo assim, ligar o disfarce bloqueie e desligá-lo passe, o oposto do que a intuição manda. Trate isso como uma chave que você liga e desliga por alvo, testando, nunca como um "deixa sempre ligado".
+Manter esse script à mão é uma corrida perdida, porque cada checagem nova pede um remendo; na prática você usa um pacote de stealth pronto, mantido por quem persegue essas detecções. E aqui mora uma armadilha contraintuitiva: alguns desafios procuram justamente o disfarce, detectando as inconsistências que ele cria. Pode ser que, num alvo assim, ligar o disfarce bloqueie e desligá-lo passe, o oposto do que a intuição manda. Trate isso como uma chave que você liga e desliga por alvo, testando, nunca como um "deixa sempre ligado".
 
 ## A história precisa fechar
 
-Repare no fio que costura o capítulo: o servidor raramente te barra por uma coisa só. Ele te barra pela incoerência. Handshake de navegador, cabeçalhos de navegador, os cookies do fluxo, o IP de onde você sai, o comportamento na página: tudo isso conta a mesma história, e quando uma peça destoa, o porteiro percebe. O IP, aliás, carrega reputação própria: um endereço de datacenter já chega marcado como provável robô, um residencial passa por acesso comum. Quando é o seu IP que destoa, seja por estar marcado, seja por sair de um país que não bate com o idioma que você declara, a saída é roteá-lo por um proxy, que faz a requisição sair de outro endereço. Não é item obrigatório: você recorre a ele só quando o IP é o que está te entregando. Passar por essa camada é, no fundo, contar uma história consistente do primeiro handshake até o clique no botão de buscar.
+Repare no fio que costura o capítulo: o servidor raramente te barra por uma coisa só. Ele te barra pela incoerência. Handshake de navegador, cabeçalhos de navegador, os cookies do fluxo, o IP de onde você sai, o comportamento na página: tudo isso conta a mesma história, e quando uma peça destoa, o porteiro percebe. O IP, aliás, carrega reputação própria: um endereço de datacenter já chega marcado como provável robô, um residencial passa por acesso comum. Quando é o seu IP que destoa, seja por estar marcado, seja por sair de um país que não bate com o idioma que você declara, a saída é roteá-lo por um proxy, que faz a requisição sair de outro endereço. Não é item obrigatório: você recorre a ele só quando o IP é o que está te entregando.
 
-Tem uma porta, porém, que história coerente nenhuma abre sozinha: o captcha. Ela te para na cara e pede que você prove, ali, que é humano.
+Há uma defesa, porém, que coerência nenhuma resolve sozinha: o captcha, que não te lê pelo comportamento da conexão, exige uma prova explícita de que você é humano.
   </script>
   <script src="render.js"></script>
 </body>

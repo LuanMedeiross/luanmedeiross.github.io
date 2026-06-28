@@ -77,7 +77,7 @@ titulo = soup.select_one("h1.titulo").get_text(strip=True)
 linhas = soup.select("table#resultados tr")
 ```
 
-O jeito como você escreve o seletor decide se o parser sobrevive ao próximo deploy do site. Ancorar no lugar errado é a causa número um de scraper que quebra em silêncio.
+O jeito como você escreve o seletor decide se o parser sobrevive ao próximo deploy do site. Um seletor preso a uma classe gerada (`field_a8f3c2`) ou à posição numa tabela quebra no próximo deploy; um ancorado no rótulo de texto aguenta.
 
 ## O navegador automatizado
 
@@ -109,7 +109,7 @@ Quando há um captcha no caminho e não dá pra desviar, você terceiriza a reso
 from twocaptcha import TwoCaptcha
 
 solver = TwoCaptcha("SUA_API_KEY")
-resultado = solver.turnstile(sitekey="0x4AAA...", url="https://exemplo.com")
+resultado = solver.turnstile(sitekey="0x4AAA...", url="https://exemplo.com")  # ex.: Cloudflare Turnstile
 token = resultado["code"]          # injeta no campo/parâmetro que o site espera
 ```
 
