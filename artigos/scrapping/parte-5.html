@@ -48,27 +48,44 @@
 
 *Extrair o dado de um HTML hostil, e aguentar fazer isso mil vezes sem ser derrubado.*
 
-Você passou pela porta e o servidor te entregou o HTML. Acabou o trabalho? Não, começou outro. Este capítulo tem duas metades. A primeira é extrair o dado de um jeito que não quebre no próximo deploy do site. A segunda é o que acontece quando você deixa de fazer isso uma vez e passa a fazer mil: a escala traz muros que uma requisição sozinha nunca mostra.
+Você passou pela porta e o servidor te entregou o HTML, mas HTML cru ainda não é o dado estruturado que você quer. Este capítulo tem duas metades. A primeira é extrair o dado de um jeito que não quebre no próximo deploy do site. A segunda é o que acontece quando você deixa de fazer isso uma vez e passa a fazer mil: a escala traz muros que uma requisição sozinha nunca mostra.
 
 ## Extrair: ancore no que é estável
 
 O erro mais comum na extração é prender o seletor em algo que o site troca a toda hora. O exemplo clássico são ids e classes gerados dinamicamente: `field_a8f3c2` hoje, `field_19bd0e` no próximo deploy. Fixar o seletor nesse id é garantir que o parser quebre, e quebre em silêncio.
 
-A regra é ancorar no que não muda. Em ordem de preferência: o *sufixo* estável do id, o rótulo de texto que fica ao lado do campo (esse quase nunca muda, porque um humano precisa lê-lo), ou um atributo semântico.
+A regra é ancorar no que não muda, e há um cardápio de âncoras conforme o que o HTML te dá, da mais limpa à mais teimosa:
 
 ```python
-# RUIM: preso a um id volátil, quebra no próximo deploy
+import re
+
+# RUIM: preso a um id/classe volátil, quebra no próximo deploy
 soup.select_one("#form_a8f3c2_numero")
 
-# BOM (a): casa pelo sufixo estável do id
+# (a) sufixo estável do id: o prefixo muda, o fim não
 soup.select_one("[id$='_numero']")
 
-# BOM (b): acha pelo rótulo visível e pega o valor ao lado
+# (b) pelo rótulo de texto: acha o <label> e pega o valor ao lado
 label = soup.find("label", string=re.compile("Número"))
 numero = label.find_next(class_="value").get_text(strip=True)
+
+# (c) pelo rótulo, subindo ao container: rótulo -> bloco do campo -> valor
+campo = label.find_parent(class_="campo")
+numero = campo.select_one(".valor").get_text(strip=True)
+
+# (d) âncora de texto fora de <label> (um <strong>/<b>) + vizinho
+ancora = soup.find("strong", string=re.compile("Valor", re.I))
+valor = ancora.find_next("span").get_text(strip=True)
+
+# (e) pelo FORMATO do valor, quando nada na estrutura é confiável
+valor = re.search(r"R\$\s?[\d.,]+", soup.get_text(" "))
+
+# (f) valor preso só num JS/atributo: regex no HTML cru
+m = re.search(r"abrirDetalhe\('(\d+)'", html)   # id que só existe no onclick
+item_id = m.group(1) if m else None
 ```
 
-Se o site randomiza até o rótulo visível (raro), nem isso te salva: aí você vai por heurística de conteúdo, identificando o campo pelo formato do valor, não pela posição.
+Use o primeiro que funcionar; cada degrau abaixo é mais frágil de manter. A regex pelo conteúdo é o que segura quando o site randomiza até o rótulo visível.
 
 ## Quando o dado vem por JavaScript
 
@@ -88,6 +105,11 @@ page.wait_for_selector("[id$='tabela'] tr", timeout=6000)
 HTML do mundo real é irregular: campos faltam em alguns registros, tabelas vêm com colunas em ordem diferente, um item no meio do lote chega malformado. Um parser rígido explode no primeiro desvio e leva o lote inteiro junto. Um parser bom degrada: isola cada item, tolera ausência, e nunca confia em posição fixa.
 
 ```python
+# ancore no container estável (a tabela) e itere as linhas
+tabela = soup.select_one("table[id$='_resultados']")   # sufixo, não id volátil
+cabecalhos = tabela.select_one("tr").select("th")
+linhas = tabela.select("tr")[1:]                        # pula o cabeçalho
+
 resultados = []
 for linha in linhas:
     try:
@@ -95,18 +117,19 @@ for linha in linhas:
     except Exception as e:
         log.warning("item ignorado: %s", e)   # 1 item ruim != lote perdido
 
-# busca a coluna pelo CABEÇALHO, não por índice fixo (sobrevive a reordenação)
+# dentro de extrair(linha): a coluna sai do CABEÇALHO, não de índice fixo
 col = {th.get_text(strip=True): i for i, th in enumerate(cabecalhos)}
+celulas = linha.select("td")
 data = celulas[col["Data/Hora"]].get_text(strip=True)
 ```
 
-Tolerância demais tem um custo escondido: se *todos* os itens passarem a falhar, o `try/except` engole o sintoma e você não percebe que parou de extrair. Guarde essa tensão, ela ainda volta.
+Tolerância demais tem um custo escondido: se *todos* os itens passarem a falhar, o `try/except` engole o sintoma e você não percebe que parou de extrair.
 
 ## Escala: a concorrência também é a sua sonda
 
 Agora a segunda metade. Fazer mil vezes não é só "repetir num loop": a escala muda o comportamento do alvo. Servidores detectam padrões de requisição previsíveis, e muitos bloqueios (limite de taxa, WAF) só aparecem sob carga. Por isso a concorrência tem um papel duplo: ela acelera a coleta e revela o muro, de preferência no seu teste, não em produção.
 
-Na prática, você divide a entrada em N trabalhadores, cada um com sua própria sessão isolada, e devolve os resultados por uma fila, sem travas no caminho dos dados, só nos contadores compartilhados.
+Na prática, você divide a entrada em N trabalhadores, cada um com sua própria sessão isolada, e devolve os resultados por uma fila. A sessão tem que ser por trabalhador porque cookies, token de estado e id de sessão pertencem a um fluxo só; dois trabalhadores no mesmo cliente embaralhariam o estado um do outro e dariam erro intermitente impossível de depurar. Trave só os contadores compartilhados, nunca o caminho dos dados.
 
 ```python
 import threading, queue
@@ -122,7 +145,21 @@ def worker(sublote):
 # em vez de abrir N navegadores (que custa memória e te denuncia pelo volume).
 ```
 
-Concorrência demais vira um auto-ataque de negação de serviço: você derruba o alvo ou acelera o próprio bloqueio. Existe um ponto ótimo por site; ache empiricamente, começando alto num lote pequeno e baixando até a taxa de erro estabilizar.
+Concorrência demais vira um auto-ataque de negação de serviço: você derruba o alvo ou acelera o próprio bloqueio. Existe um ponto ótimo por site; ache empiricamente, rodando um lote pequeno em vários níveis e ficando no maior nível antes de a taxa de erro disparar.
+
+```python
+# achar o ponto ótimo: rode o MESMO lote pequeno em vários níveis
+# e fique no maior nível antes de a taxa de erro disparar
+import concurrent.futures as cf
+
+def taxa_de_erro(n):
+    with cf.ThreadPoolExecutor(max_workers=n) as ex:
+        res = list(ex.map(processar, lote_amostra))
+    return sum(r is None for r in res) / len(res)
+
+for n in (2, 4, 8, 16):
+    print(n, taxa_de_erro(n))     # sobe até o erro deixar de ser ~0
+```
 
 ## Falhar com elegância: retry, backoff e o disjuntor
 
@@ -170,9 +207,7 @@ s.proxies = {"http": GATEWAY, "https": GATEWAY}
 
 ## O fecho
 
-Extrair bem é ancorar no estável e fazer o parser dobrar em vez de quebrar. Escalar bem é tratar a concorrência como sonda e ter um jeito de parar com elegância quando o muro aparece. Com isso, você tem um scraper que funciona hoje.
-
-E aqui mora o inimigo mais traiçoeiro, aquele que nenhuma técnica vista até agora pega sozinha: o dia em que o site muda e o seu scraper continua "funcionando", sem erro, sem alarme, gravando lixo na sua base enquanto você dorme tranquilo. Perceber isso antes de a base inteira contaminar é um problema por si só.
+Um scraper assim funciona hoje. O risco que sobra aparece quando o site muda: o parser tolerante para de extrair sem lançar erro, e a base passa a receber registro vazio sem alarme.
   </script>
   <script src="render.js"></script>
 </body>

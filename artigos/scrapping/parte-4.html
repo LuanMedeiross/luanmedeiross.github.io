@@ -60,30 +60,41 @@ Cada tipo de captcha fala uma língua diferente, então o primeiro passo é iden
 
 ```python
 soup = BeautifulSoup(html, "html.parser")
+h = html.lower()
 
-if soup.select_one("[data-sitekey]"):
-    tipo = "widget_com_sitekey"      # injeta um token num campo escondido
-elif "g-recaptcha-response" in html:
-    tipo = "checkbox_ou_invisivel"
-elif "data:image" in html:
-    tipo = "imagem"                  # uma imagem embutida pra ler
+# cada captcha deixa uma marca própria no HTML; detecte por ela
+if "cf-turnstile" in h or "challenges.cloudflare.com/turnstile" in h:
+    tipo = "turnstile"          # Cloudflare Turnstile (token vai no cf-turnstile-response)
+elif "turing.captcha.qcloud.com" in h or "new tencentcaptcha" in h:
+    tipo = "tencent"            # Tencent Captcha: o id é o appId do new TencentCaptcha(...)
+elif "hcaptcha.com" in h or "h-captcha" in h:
+    tipo = "hcaptcha"           # hCaptcha (token no h-captcha-response)
+elif "recaptcha/api.js" in h or "g-recaptcha" in h:
+    tipo = "recaptcha_v2"       # reCAPTCHA v2 (checkbox ou invisível)
+elif soup.select_one("img[src^='data:image']") or soup.select_one("img[src*='captcha']"):
+    tipo = "imagem"             # imagem estática embutida: baixe os bytes e leia
+else:
+    tipo = "nenhum"
 ```
 
 Aí vem o tropeço que derruba muita gente: o captcha estar carregado no HTML não significa que ele está ativo. Alguns sites implementam um captcha mas o deixam desativado; outros trocaram de captcha e nunca removeram a implementação antiga, que segue no HTML sem disparar. Antes de gastar uma resolução, confirme qual desafio dispara de fato: olhe o que o botão de buscar realmente chama no `onclick` e qual função de captcha é de fato acionada. Resolver o captcha errado é dinheiro no lixo.
 
 ## Resolver: o fluxo genérico
 
-O padrão é sempre o mesmo, qualquer que seja o tipo: você manda ao serviço os parâmetros do desafio (a sitekey e a URL, ou os bytes da imagem), espera o token, e injeta esse token no campo escondido ou no parâmetro que o site espera.
+O padrão é sempre o mesmo, qualquer que seja o tipo: você manda ao serviço os parâmetros do desafio (o identificador do captcha e a URL, ou os bytes da imagem), espera o token, e injeta esse token no campo escondido ou no parâmetro que o site espera.
 
 ```python
 from twocaptcha import TwoCaptcha
 solver = TwoCaptcha("SUA_API_KEY")
 
-# widget com sitekey: manda sitekey + url, recebe o token pronto
-token = solver.turnstile(sitekey=sitekey, url=url)["code"]
-
-# captcha de imagem: manda os bytes, recebe o texto lido
-texto = solver.normal("captcha.png")["code"]
+# sitekey/app_id vêm da extração do HTML (mostrada adiante)
+# cada tipo tem seu método; todos devolvem o token em ["code"]
+token = solver.turnstile(sitekey=sitekey, url=url)["code"]               # Cloudflare Turnstile
+token = solver.recaptcha(sitekey=sitekey, url=url, invisible=1)["code"]  # reCAPTCHA v2 (invisível: invisible=1)
+token = solver.hcaptcha(sitekey=sitekey, url=url)["code"]                # hCaptcha
+token = solver.tencent(app_id=app_id, url=url,                          # Tencent: id = appId
+                       captcha_script="https://.../TCaptcha-global.js")["code"]  # script não-padrão obrigatório, senão UNSOLVABLE
+texto = solver.normal("captcha.png")["code"]                            # imagem estática
 
 # o token/texto entra no POST como se você tivesse resolvido na tela
 ```
@@ -108,12 +119,22 @@ Essa é a lição que mais economiza tempo e dinheiro. Um captcha pode voltar er
 
 A lição: muito captcha "irresolvível" é só um parâmetro faltando. Antes de desistir, leia a documentação do serviço para aquele tipo, confirme se a biblioteca tem o método, procure problemas já relatados por outras pessoas (o mesmo desafio provavelmente já travou alguém), e esgote os parâmetros opcionais. Testar costuma ser de graça quando o resultado é "não consegui resolver", então teste à vontade antes de cravar que é impossível.
 
-## Leia a sitekey, não a fixe
+## Leia o identificador, não o fixe
 
-A `sitekey` do captcha pode mudar entre deploys do site. Se você fixou ela no código, na próxima rotação você passa a pedir a resolução do captcha errado, e falha em silêncio. Extraia a sitekey do próprio HTML, em tempo de execução, sempre:
+O identificador do captcha pode mudar entre deploys do site. Se você o fixou no código, na próxima rotação você passa a pedir a resolução do captcha errado, e falha em silêncio. Extraia o identificador do próprio HTML, em tempo de execução, sempre. E note que ele não vive sempre no mesmo lugar: a maioria dos widgets usa o `data-sitekey`, mas alguns guardam o id no argumento de um construtor JavaScript.
 
 ```python
-sitekey = BeautifulSoup(html, "html.parser").select_one("[data-sitekey]")["data-sitekey"]
+import re
+soup = BeautifulSoup(html, "html.parser")
+
+# a maioria dos widgets expõe o id no data-sitekey
+# (reCAPTCHA, hCaptcha e o Turnstile do Cloudflare seguem esse padrão)
+el = soup.select_one("[data-sitekey]")
+sitekey = el["data-sitekey"] if el else None
+
+# o Tencent NÃO usa data-sitekey: o id (appId) vem no argumento do construtor
+m = re.search(r"new TencentCaptcha\(\s*['\"]([^'\"]+)['\"]", html)
+app_id = m.group(1) if m else None
 ```
 
 ## O proxy e o IP de quem resolve
@@ -132,16 +153,13 @@ token = solver.turnstile(sitekey=sitekey, url=url,
 
 Existe uma classe de sites realmente blindados onde o problema não é (só) o captcha. A página calcula um score de confiança do seu navegador e do seu comportamento e, mesmo com o captcha resolvido, devolve `false` e te bloqueia. Mudar cabeçalhos, locale, stealth, nada move o ponteiro, porque o muro não é o desafio: é "isto não parece uma pessoa de verdade num navegador de verdade".
 
-Contra esse tipo de barreira, injetar um token resolvido de fora não soma confiança nenhuma. O que ajuda é resolver o captcha por interação real dentro do próprio navegador, com uma extensão como a do NopeCHA: a resolução acontece como a de um usuário comum e conta pontos no score, em vez de parecer um token vindo de fora. Some a isso comportamento de gente de verdade, o mouse se movendo até os botões e cliques reais, e o score sobe o suficiente para passar. É caro e frágil, e só compensa quando a barra é essa: o último recurso entre os últimos recursos.
+Contra esse tipo de barreira, injetar um token resolvido de fora não soma confiança nenhuma. O que ajuda é resolver o captcha por interação real dentro do próprio navegador, com uma extensão como a do NopeCHA: a resolução acontece como a de um usuário comum e conta pontos no score, em vez de parecer um token vindo de fora. Some a isso comportamento de gente de verdade, o mouse se movendo até os botões e cliques reais, e o score sobe o suficiente para passar. É lento e quebradiço: depende da posição dos elementos na tela, então um ajuste de layout já o derruba.
 
-E continua valendo a regra que costura este capítulo inteiro: resolver o captcha não conserta uma sessão que o servidor já achou suspeita. Se você apanha de captcha porque a sua conexão parece de robô, o token só adia o bloqueio, a causa está uma camada antes. Trate a causa, não o sintoma.
+E continua valendo a regra que costura este capítulo inteiro: resolver o captcha não conserta uma sessão que o servidor já achou suspeita. Se você apanha de captcha porque a sua conexão parece de robô, o token só adia o bloqueio, a causa está uma camada antes.
 
 ## O resumo
 
-O captcha parece o muro mais alto e costuma ser o mais mecânico: identifique o tipo, confirme que ele está ligado, entregue os parâmetros certos a um serviço, injete o token. O que separa quem passa de quem desiste não é técnica avançada. É não cravar "impossível" sem antes pesquisar e esgotar os parâmetros.
-
-Passada essa porta, o servidor finalmente te entrega o HTML. Só que aí começa um problema diferente: extrair o dado de um jeito que não quebre amanhã, e descobrir o que acontece quando você faz isso não uma, mas mil vezes.
-  </script>
+O captcha parece o muro mais alto e costuma ser o mais mecânico: identifique o tipo, confirme que ele está ligado, entregue os parâmetros certos a um serviço, injete o token. Antes de cravar "impossível", confirme que passou os parâmetros opcionais do desafio e que o identificador sai do HTML em runtime. É quase sempre aí, num parâmetro faltando, que mora o "irresolvível".  </script>
   <script src="render.js"></script>
 </body>
 </html>
