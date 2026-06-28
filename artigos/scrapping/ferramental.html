@@ -61,6 +61,13 @@ print(r.status_code)          # 200?
 dados = r.json()              # se a resposta for de uma API
 # html = r.text               # ou o HTML cru, se for pra parsear
 ```
+```javascript
+const url = "https://exemplo.com/busca?" + new URLSearchParams({ q: "termo" });
+const r = await fetch(url);
+console.log(r.status);              // 200?
+const dados = await r.json();       // se a resposta for de uma API
+// const html = await r.text();     // ou o HTML cru, se for pra parsear
+```
 
 A pegadinha é que o cliente HTTP padrão tem uma assinatura reconhecível, e alguns sites barram exatamente isso antes de entregar qualquer coisa. Quando ele "não passa", nem sempre é porque você precisa de navegador; muitas vezes é só a assinatura.
 
@@ -74,6 +81,13 @@ from bs4 import BeautifulSoup
 soup = BeautifulSoup(html, "html.parser")
 titulo = soup.select_one("h1.titulo").get_text(strip=True)
 linhas = soup.select("table#resultados tr")
+```
+```javascript
+const cheerio = require("cheerio");
+
+const $ = cheerio.load(html);
+const titulo = $("h1.titulo").text().trim();
+const linhas = $("table#resultados tr");
 ```
 
 O jeito como você escreve o seletor decide se o parser sobrevive ao próximo deploy do site. Um seletor preso a uma classe gerada (`field_a8f3c2`) ou à posição numa tabela quebra no próximo deploy; um ancorado no rótulo de texto aguenta.
@@ -96,6 +110,17 @@ with sync_playwright() as p:
     page.wait_for_selector("#resultados tr")   # espera o CONTEÚDO, não só a resposta
     html = page.content()
 ```
+```javascript
+const { chromium } = require("playwright");
+
+const browser = await chromium.launch({ headless: true });
+const page = await browser.newPage();
+await page.goto("https://exemplo.com");
+await page.fill("#busca", "termo");
+await page.click("#enviar");
+await page.waitForSelector("#resultados tr");   // espera o CONTEÚDO, não só a resposta
+const html = await page.content();
+```
 
 Um detalhe que pega todo mundo: esperar a resposta da rede não é a mesma coisa que esperar o conteúdo aparecer. Espere o elemento que você quer existir no DOM, senão você lê uma página ainda vazia e jura que o site mudou.
 
@@ -110,6 +135,14 @@ from twocaptcha import TwoCaptcha
 solver = TwoCaptcha("SUA_API_KEY")
 resultado = solver.turnstile(sitekey="0x4AAA...", url="https://exemplo.com")  # ex.: Cloudflare Turnstile
 token = resultado["code"]          # injeta no campo/parâmetro que o site espera
+```
+```javascript
+// serviço externo de resolução (há vários: 2Captcha, NopeCHA, etc.)
+const { Solver } = require("@2captcha/2captcha");
+
+const solver = new Solver("SUA_API_KEY");
+const res = await solver.turnstile("0x4AAA...", "https://exemplo.com");  // ex.: Cloudflare Turnstile
+const token = res.data;            // injeta no campo/parâmetro que o site espera
 ```
 
 Resolver o captcha não conserta uma sessão que o servidor já achou suspeita. Se você está apanhando de captcha porque a sua conexão parece de robô, o token só adia o bloqueio, e a causa está uma camada antes.

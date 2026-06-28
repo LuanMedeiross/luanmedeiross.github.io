@@ -83,6 +83,33 @@ valor = re.search(r"R\$\s?[\d.,]+", soup.get_text(" "))
 m = re.search(r"abrirDetalhe\('(\d+)'", html)   # id que só existe no onclick
 item_id = m.group(1) if m else None
 ```
+```javascript
+const $ = cheerio.load(html);
+
+// RUIM: preso a um id/classe volátil, quebra no próximo deploy
+$("#form_a8f3c2_numero");
+
+// (a) sufixo estável do id: o prefixo muda, o fim não
+$("[id$='_numero']");
+
+// (b) pelo rótulo de texto: acha o <label> e pega o valor ao lado
+const label = $("label").filter((_, el) => /Número/.test($(el).text()));
+const numero = label.next(".value").text().trim();
+
+// (c) pelo rótulo, subindo ao container: rótulo -> bloco do campo -> valor
+const numeroC = label.closest(".campo").find(".valor").text().trim();
+
+// (d) âncora de texto fora de <label> (um <strong>/<b>) + vizinho
+const ancora = $("strong").filter((_, el) => /valor/i.test($(el).text()));
+const valor = ancora.next("span").text().trim();
+
+// (e) pelo FORMATO do valor, quando nada na estrutura é confiável
+const valorE = $.root().text().match(/R\$\s?[\d.,]+/);
+
+// (f) valor preso só num JS/atributo: regex no HTML cru
+const m = html.match(/abrirDetalhe\('(\d+)'/);   // id que só existe no onclick
+const item_id = m ? m[1] : null;
+```
 
 Use o primeiro que funcionar; cada degrau abaixo é mais frágil de manter. A regex pelo conteúdo é o que segura quando o site randomiza até o rótulo visível.
 
@@ -97,6 +124,14 @@ dados = requests.get("https://exemplo.com/api/resultados",
 
 # se precisar do navegador: espere o CONTEÚDO, não só a resposta
 page.wait_for_selector("[id$='tabela'] tr", timeout=6000)
+```
+```javascript
+// preferível: consumir a API que alimenta o DOM (JSON, mais estável que HTML)
+const dados = await gotScraping.get("https://exemplo.com/api/resultados",
+  { searchParams: { q: "termo" } }).json();
+
+// se precisar do navegador: espere o CONTEÚDO, não só a resposta
+await page.waitForSelector("[id$='tabela'] tr", { timeout: 6000 });
 ```
 
 ## Parsing que dobra em vez de quebrar
@@ -121,6 +156,27 @@ col = {th.get_text(strip=True): i for i, th in enumerate(cabecalhos)}
 celulas = linha.select("td")
 data = celulas[col["Data/Hora"]].get_text(strip=True)
 ```
+```javascript
+// ancore no container estável (a tabela) e itere as linhas
+const tabela = $("table[id$='_resultados']");          // sufixo, não id volátil
+const cabecalhos = tabela.find("tr").first().find("th");
+const linhas = tabela.find("tr").slice(1);             // pula o cabeçalho
+
+const resultados = [];
+linhas.each((_, linha) => {
+  try {
+    resultados.push(extrair($(linha)));
+  } catch (e) {
+    console.warn("item ignorado:", e.message);   // 1 item ruim != lote perdido
+  }
+});
+
+// dentro de extrair(linha): a coluna sai do CABEÇALHO, não de índice fixo
+const col = {};
+cabecalhos.each((i, th) => { col[$(th).text().trim()] = i; });
+const celulas = $(linha).find("td");
+const data = celulas.eq(col["Data/Hora"]).text().trim();
+```
 
 Tolerância demais tem um custo escondido: se *todos* os itens passarem a falhar, o `try/except` engole o sintoma e você não percebe que parou de extrair.
 
@@ -143,6 +199,17 @@ def worker(sublote):
 # para navegador, o equivalente barato é 1 processo com N contextos isolados,
 # em vez de abrir N navegadores (que custa memória e te denuncia pelo volume).
 ```
+```javascript
+// Node é async, não multi-thread: a "concorrência" é N tarefas em voo ao mesmo
+// tempo. Dê a cada uma sua própria sessão (cookieJar/contexto isolado).
+async function worker(sublote, resultados) {
+  const cliente = novaSessao();         // sessão/contexto isolado por worker
+  for (const doc of sublote) resultados.push(await processar(doc, cliente));
+}
+
+// para navegador, o equivalente barato é 1 processo com N contextos isolados,
+// em vez de abrir N navegadores (que custa memória e te denuncia pelo volume).
+```
 
 Concorrência demais vira um auto-ataque de negação de serviço: você derruba o alvo ou acelera o próprio bloqueio. Existe um ponto ótimo por site; ache empiricamente, rodando um lote pequeno em vários níveis e ficando no maior nível antes de a taxa de erro disparar.
 
@@ -158,6 +225,25 @@ def taxa_de_erro(n):
 
 for n in (2, 4, 8, 16):
     print(n, taxa_de_erro(n))     # sobe até o erro deixar de ser ~0
+```
+```javascript
+// achar o ponto ótimo: rode o MESMO lote pequeno em vários níveis
+// e fique no maior nível antes de a taxa de erro disparar
+async function taxaDeErro(n) {
+  let i = 0, falhas = 0;
+  async function corredor() {
+    while (i < loteAmostra.length) {
+      const r = await processar(loteAmostra[i++]);
+      if (r == null) falhas++;
+    }
+  }
+  await Promise.all(Array.from({ length: n }, corredor));  // n tarefas em paralelo
+  return falhas / loteAmostra.length;
+}
+
+for (const n of [2, 4, 8, 16]) {
+  console.log(n, await taxaDeErro(n));   // sobe até o erro deixar de ser ~0
+}
 ```
 
 ## Falhar com elegância: retry, backoff e o circuit breaker
@@ -186,6 +272,27 @@ def pode_continuar(ok):
         falhas = 0 if ok else falhas + 1
         return falhas < LIMITE          # False = N falhas seguidas, aborte o lote
 ```
+```javascript
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function comRetry(fn, tentativas = 3) {
+  for (let i = 0; i < tentativas; i++) {
+    try { return await fn(); }
+    catch (e) {
+      if (!ehErroDeRede(e) || i === tentativas - 1) throw e;
+      await sleep(2 ** i * 1000);       // 1s, 2s, 4s
+    }
+  }
+}
+
+// circuit breaker: conta falhas CONSECUTIVAS; um sucesso zera. em Node as tarefas
+// async rodam no mesmo thread, então aqui não precisa de lock.
+let falhas = 0;
+function podeContinuar(ok) {
+  falhas = ok ? 0 : falhas + 1;
+  return falhas < LIMITE;               // false = N falhas seguidas, aborte o lote
+}
+```
 
 Backoff cego contra um bloqueio definitivo só adia o inevitável. O circuit breaker é justamente o reconhecimento de que, passado um limite, insistir é desperdício: a resposta certa é parar e investigar.
 
@@ -208,6 +315,21 @@ def nova_sessao():
 GATEWAY = "http://user:senha@gateway:porta"
 s = requests.Session()
 s.proxies = {"http": GATEWAY, "https": GATEWAY}
+```
+```javascript
+const { HttpsProxyAgent } = require("hpagent");
+
+// rotação MANUAL: uma lista de proxies residenciais, troca quando apanha
+const POOL = ["http://user:senha@host1:porta", "http://user:senha@host2:porta"];
+let i = 0;
+function novaSessao() {
+  const proxy = POOL[i++ % POOL.length];   // próximo IP da fila
+  return gotScraping.extend({ agent: { https: new HttpsProxyAgent({ proxy }) } });
+}
+
+// proxy ROTATIVO: a URL é fixa; o serviço troca o IP de saída a cada request
+const GATEWAY = "http://user:senha@gateway:porta";
+const sessao = gotScraping.extend({ agent: { https: new HttpsProxyAgent({ proxy: GATEWAY }) } });
 ```
 
 ## Resumo

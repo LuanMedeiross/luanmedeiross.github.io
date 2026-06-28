@@ -61,6 +61,14 @@ article{min-width:0;padding:0 0 4rem;max-width:720px}
 #content :not(pre)>code{font-family:'SF Mono',ui-monospace,monospace;font-size:.82em;background:var(--code-bg);border:1px solid var(--border);border-radius:4px;padding:1px 5px;color:var(--accent-dim)}
 #content pre{background:var(--code-bg);border:1px solid var(--border);border-radius:var(--radius);padding:1rem 1.15rem;margin:1.3rem 0;overflow-x:auto;font-size:.82rem;line-height:1.6}
 #content pre code{font-family:'SF Mono',ui-monospace,monospace;background:none;padding:0;color:var(--text)}
+
+/* abas de linguagem (Python/JavaScript) nos blocos de código */
+.code-tabs{margin:1.3rem 0}
+.code-tabs-head{display:flex;gap:.3rem}
+.code-tab{font-family:'SF Mono',ui-monospace,monospace;font-size:.72rem;line-height:1;padding:6px 14px;border:1px solid var(--border);border-bottom:none;background:var(--surface);color:var(--muted);cursor:pointer;border-radius:6px 6px 0 0}
+.code-tab:hover{color:var(--text)}
+.code-tab.active{color:var(--accent);background:var(--code-bg);font-weight:700}
+.code-tabs pre{margin:0;border-top-left-radius:0;border-top-right-radius:0}
 #content blockquote{border-left:3px solid var(--accent);background:var(--surface);border-radius:0 var(--radius) var(--radius) 0;padding:.85rem 1.15rem;margin:1.4rem 0;font-size:.97rem}
 #content blockquote p{margin:.4rem 0}
 #content table{width:100%;border-collapse:collapse;margin:1.4rem 0;font-size:.9rem}
