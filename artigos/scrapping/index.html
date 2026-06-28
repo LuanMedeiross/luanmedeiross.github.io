@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="Como construir um scraper que sobrevive ao mundo real — guia em sete partes, da tomada de decisão à manutenção a longo prazo." />
+  <meta name="description" content="Como construir um scraper que sobrevive ao mundo real — guia em sete capítulos, da tomada de decisão à manutenção a longo prazo." />
   <title>Como construir um scraper que sobrevive ao mundo real</title>
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -18,7 +18,7 @@
       <div id="content">
         <h1>Como construir um scraper que sobrevive ao mundo real</h1>
         <p class="lead">
-          Da decisão ao código, e do código à manutenção: scraping em produção, em sete partes.
+          Da decisão ao código, e do código à manutenção: scraping em produção, em sete capítulos.
         </p>
 
         <h2>Introdução</h2>
@@ -41,44 +41,37 @@
             A parte difícil do scraping não é extrair uma página, quase todo mundo consegue.
             É continuar extraindo a coisa certa no dia seguinte, quando o site muda e nada
             avisa. O guia vai da primeira decisão (API ou navegador?) até o alarme que avisa
-            quando a coleta quebra, em sete partes, com exemplos em Python.
+            quando a coleta quebra, em sete capítulos, com exemplos em Python.
           </p>
         </blockquote>
 
         <h2>Conteúdo</h2>
         <div class="summary-list">
-          <a class="part" href="parte-1.html">
-            <div class="pnum">Parte 1</div>
+          <a class="part" href="como-pensar.html">
             <div class="ptitle">Como pensar um scraper</div>
             <div class="pdesc">A decisão que vem antes do código: ler as requisições no DevTools e escolher a abordagem certa.</div>
           </a>
-          <a class="part" href="parte-2.html">
-            <div class="pnum">Parte 2</div>
+          <a class="part" href="ferramental.html">
             <div class="ptitle">O ferramental</div>
             <div class="pdesc">As quatro peças (cliente HTTP, parsing, navegador, captcha) e quando usar cada uma.</div>
           </a>
-          <a class="part" href="parte-3.html">
-            <div class="pnum">Parte 3</div>
+          <a class="part" href="conexao-e-sessao.html">
             <div class="ptitle">Conexão &amp; Sessão</div>
             <div class="pdesc">Passar pela porta: fingerprint de TLS, cabeçalhos, cookies e estado, disfarce no navegador.</div>
           </a>
-          <a class="part" href="parte-4.html">
-            <div class="pnum">Parte 4</div>
+          <a class="part" href="captcha.html">
             <div class="ptitle">Captcha</div>
             <div class="pdesc">Detectar o tipo, resolver com serviço externo, e o caso extremo do score de confiança do navegador.</div>
           </a>
-          <a class="part" href="parte-5.html">
-            <div class="pnum">Parte 5</div>
+          <a class="part" href="conteudo-e-escala.html">
             <div class="ptitle">Conteúdo &amp; Escala</div>
             <div class="pdesc">Extrair sem quebrar no próximo deploy, e aguentar fazer isso mil vezes sem ser derrubado.</div>
           </a>
-          <a class="part" href="parte-6.html">
-            <div class="pnum">Parte 6</div>
+          <a class="part" href="longo-prazo.html">
             <div class="ptitle">Scraping a longo prazo</div>
-            <div class="pdesc">Detectar a quebra antes de gravar lixo: drift, gabarito, replay offline, persistência idempotente.</div>
+            <div class="pdesc">Detectar a quebra antes de gravar lixo: assinatura versionada, gabarito, replay offline.</div>
           </a>
-          <a class="part" href="parte-7.html">
-            <div class="pnum">Parte 7</div>
+          <a class="part" href="fechamento.html">
             <div class="ptitle">Fechamento</div>
             <div class="pdesc">As seis fases recapituladas, por onde começar amanhã, e uma palavra sobre responsabilidade.</div>
           </a>
