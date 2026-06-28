@@ -64,6 +64,13 @@ from curl_cffi import requests
 r = requests.get("https://exemplo.com", impersonate="chrome")
 print(r.status_code)   # passa onde o cliente padrão tomava 403
 ```
+```javascript
+// um cliente HTTP que assume o fingerprint TLS de um navegador real
+const { gotScraping } = require("got-scraping");
+
+const r = await gotScraping.get("https://exemplo.com");
+console.log(r.statusCode);   // passa onde o cliente padrão tomava 403
+```
 
 Isso vence a checagem do handshake, mas não um desafio que exige executar JavaScript. Se, depois de passar no TLS, ainda vem uma página de "verificando seu navegador", o problema é outro e você vai precisar do navegador.
 
@@ -90,6 +97,25 @@ r = requests.get(url, headers=headers, impersonate="chrome")
 xhr = {"Accept": "application/json, text/javascript, */*; q=0.01",
        "X-Requested-With": "XMLHttpRequest", "Referer": "https://exemplo.com/busca"}
 ```
+```javascript
+// o cliente que imita o navegador já manda o UA e a ordem dos cabeçalhos;
+// você completa com os que mudam por requisição
+const headers = {
+  "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+  "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+  "Accept-Encoding": "gzip, deflate, br",
+  "Upgrade-Insecure-Requests": "1",
+  "Sec-Fetch-Dest": "document",
+  "Sec-Fetch-Mode": "navigate",
+  "Sec-Fetch-Site": "same-origin",
+  "Referer": "https://exemplo.com/",
+};
+const r = await gotScraping.get(url, { headers });
+
+// numa chamada XHR, o Accept e o X-Requested-With mudam:
+const xhr = { "Accept": "application/json, text/javascript, */*; q=0.01",
+              "X-Requested-With": "XMLHttpRequest", "Referer": "https://exemplo.com/busca" };
+```
 
 Um detalhe que poupa dor de cabeça: centralize esses valores num lugar só. `User-Agent` copiado em dez arquivos vira dez versões diferentes com o tempo, e basta uma destoar pra você ter um bug que só aparece "às vezes".
 
@@ -112,6 +138,26 @@ form["q"] = "termo"                       # seus parâmetros por cima
 # 3) POST reusando cookies (a sessão cuida) + os hidden + Referer coerente
 r = s.post("https://exemplo.com/busca", data=form,
            headers={"Referer": "https://exemplo.com/busca"})
+```
+```javascript
+const { CookieJar } = require("tough-cookie");
+const cheerio = require("cheerio");
+const cookieJar = new CookieJar();   // a sessão: guarda os cookies entre requests
+
+// 1) GET inicial: o cookieJar guarda os cookies (um id de sessão tipo jsessionid)
+const home = await gotScraping.get("https://exemplo.com/busca", { cookieJar });
+const $ = cheerio.load(home.body);
+
+// 2) colha TODOS os hidden do form (_csrf, javax.faces.ViewState, etc.),
+//    não só "o token": eles costumam ser exigidos juntos no POST
+const form = {};
+$("form input[name]").each((_, el) => { form[el.attribs.name] = el.attribs.value || ""; });
+form.q = "termo";                          // seus parâmetros por cima
+
+// 3) POST reusando cookies (o jar cuida) + os hidden + Referer coerente
+const r = await gotScraping.post("https://exemplo.com/busca", {
+  cookieJar, form, headers: { "Referer": "https://exemplo.com/busca" },
+});
 ```
 
 Onde o estado mora varia: um campo escondido de name fixo, um campo gerado pelo framework, um cookie que a sessão já guarda, ou um valor que só aparece depois de uma XHR intermediária. Por isso reenviar o formulário inteiro é mais seguro que caçar um campo só. E se o valor é gerado por JavaScript no navegador, o GET não te entrega ele pronto, e aí você cai no caso de precisar executar JS.
@@ -142,6 +188,29 @@ page.add_init_script("""
   };
 """)
 page.goto("https://exemplo.com")
+```
+```javascript
+// injeta o disfarce ANTES de a página rodar o JavaScript dela
+await page.addInitScript(() => {
+  Object.defineProperty(navigator, 'webdriver',  { get: () => false });
+  Object.defineProperty(navigator, 'languages',  { get: () => ['pt-BR','pt','en-US'] });
+  window.chrome = window.chrome || { runtime: {} };
+  // plugins plausíveis, não uma lista vazia
+  Object.defineProperty(navigator, 'plugins', { get: () => [{ name: 'Chrome PDF Plugin' }] });
+  // WebGL: fornecedor/renderer de uma GPU real, não o de software headless
+  const gp = WebGLRenderingContext.prototype.getParameter;
+  WebGLRenderingContext.prototype.getParameter = function (p) {
+    if (p === 0x9245) return 'Intel Inc.';               // UNMASKED_VENDOR
+    if (p === 0x9246) return 'Intel Iris OpenGL Engine';  // UNMASKED_RENDERER
+    return gp.call(this, p);
+  };
+  // fuso coerente com o IP de saída
+  const ro = Intl.DateTimeFormat.prototype.resolvedOptions;
+  Intl.DateTimeFormat.prototype.resolvedOptions = function () {
+    const r = ro.call(this); r.timeZone = 'America/Sao_Paulo'; return r;
+  };
+});
+await page.goto("https://exemplo.com");
 ```
 
 Manter esse script à mão é uma corrida perdida, porque cada checagem nova pede um remendo; na prática você usa um pacote de stealth pronto, mantido por quem persegue essas detecções. E aqui mora uma armadilha contraintuitiva: alguns desafios procuram justamente o disfarce, detectando as inconsistências que ele cria. Pode ser que, num alvo assim, ligar o disfarce bloqueie e desligá-lo passe, o oposto do que a intuição manda. Trate isso como uma chave que você liga e desliga por alvo, testando, nunca como um "deixa sempre ligado".

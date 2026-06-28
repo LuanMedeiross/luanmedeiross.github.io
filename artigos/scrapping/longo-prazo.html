@@ -71,6 +71,22 @@ nova = assinatura(requests.get(URL).text)
 if nova != json.load(open("baseline.json")):
     alertar(nova)   # revise ANTES de a produção rodar em cima de uma mudança
 ```
+```javascript
+function assinatura(html) {
+  const $ = cheerio.load(html);
+  return {
+    campos: $("input[name]").map((_, i) => i.attribs.name).get().sort(),
+    captcha: detectarTipo(html),
+    // id do widget (data-sitekey no padrão reCAPTCHA/hCaptcha/Turnstile)
+    sitekey: $("[data-sitekey]").attr("data-sitekey") || null,
+  };
+}
+
+const nova = assinatura((await gotScraping.get(URL)).body);
+const baseline = JSON.parse(fs.readFileSync("baseline.json", "utf8"));
+if (JSON.stringify(nova) !== JSON.stringify(baseline))
+  alertar(nova);   // revise ANTES de a produção rodar em cima de uma mudança
+```
 
 Tem um detalhe que evita o falso positivo: se os ids do formulário são randômicos, normalize-os antes de comparar, trocando o sufixo volátil por um placeholder. Sem isso, todo deploy do site vira um "mudou" falso, e você aprende a ignorar o alarme, que é exatamente como alarmes morrem.
 
@@ -86,6 +102,17 @@ res = scrape(gabarito["entrada"])
 assert len(res) >= gabarito["min_results"]
 for campo in gabarito["campos_obrig"]:
     assert any(r.get(campo) for r in res), f"{campo} sempre vazio: o seletor quebrou"
+```
+```javascript
+const assert = require("node:assert");
+
+const gabarito = { entrada: "<entrada de teste>", minResults: 1,
+                   camposObrig: ["numero", "data", "partes"] };
+
+const res = await scrape(gabarito.entrada);
+assert(res.length >= gabarito.minResults);
+for (const campo of gabarito.camposObrig)
+  assert(res.some((r) => r[campo]), `${campo} sempre vazio: o seletor quebrou`);
 ```
 
 Derive o gabarito de um run real, pegando a interseção dos campos que vieram preenchidos em *todos* os resultados, em vez de escrever à mão. Assim ele reflete o que o alvo realmente entrega, e não a sua suposição do que deveria entregar.
@@ -105,6 +132,18 @@ for r in res:
         valor = r.get(campo, "")
         assert padrao.match(valor), f"{campo} fora do formato: {valor!r} (campo trocado?)"
 ```
+```javascript
+// o gabarito também afirma a FORMA do valor, não só a presença
+const FORMATO = {
+  numero: /^\d{5,}$/,              // só dígitos, tamanho mínimo
+  data:   /^\d{2}\/\d{2}\/\d{4}$/, // padrão de data esperado
+};
+for (const r of res)
+  for (const [campo, padrao] of Object.entries(FORMATO)) {
+    const valor = r[campo] || "";
+    assert(padrao.test(valor), `${campo} fora do formato: ${JSON.stringify(valor)} (campo trocado?)`);
+  }
+```
 
 E nada substitui o olho humano de vez em quando: pegue uma amostra pequena do que você coletou e confira à mão contra a fonte. Cinco registros conferidos pegam o erro sistemático que nenhuma asserção previu, porque você só escreve asserção para o erro que já imaginou.
 
@@ -121,6 +160,17 @@ def parse_detalhe(html, doc):
 html = open("captura/resposta_200.html").read()
 dados = parse_detalhe(html, doc)
 conferir_contra_gabarito(dados)   # PASS/FAIL sem ir à produção
+```
+```javascript
+// parser PURO: recebe HTML, devolve dados. NÃO faz rede por dentro.
+function parseDetalhe(html, doc) {
+  // ...
+}
+
+// replay: roda só o parser contra um HTML salvo de um run anterior
+const html = fs.readFileSync("captura/resposta_200.html", "utf8");
+const dados = parseDetalhe(html, doc);
+conferirContraGabarito(dados);   // PASS/FAIL sem ir à produção
 ```
 
 Essa separação, um parser puro, sem efeitos colaterais, é a decisão que torna todo o resto barato: testável offline, diagnosticável, à prova de regressão.

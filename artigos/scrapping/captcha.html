@@ -75,6 +75,25 @@ elif soup.select_one("img[src^='data:image']") or soup.select_one("img[src*='cap
 else:
     tipo = "nenhum"
 ```
+```javascript
+const $ = cheerio.load(html);
+const h = html.toLowerCase();
+
+let tipo;
+// cada captcha deixa uma marca própria no HTML; detecte por ela
+if (h.includes("cf-turnstile") || h.includes("challenges.cloudflare.com/turnstile"))
+  tipo = "turnstile";          // Cloudflare Turnstile (token vai no cf-turnstile-response)
+else if (h.includes("turing.captcha.qcloud.com") || h.includes("new tencentcaptcha"))
+  tipo = "tencent";            // Tencent Captcha: o id é o appId do new TencentCaptcha(...)
+else if (h.includes("hcaptcha.com") || h.includes("h-captcha"))
+  tipo = "hcaptcha";           // hCaptcha (token no h-captcha-response)
+else if (h.includes("recaptcha/api.js") || h.includes("g-recaptcha"))
+  tipo = "recaptcha_v2";       // reCAPTCHA v2 (checkbox ou invisível)
+else if ($("img[src^='data:image']").length || $("img[src*='captcha']").length)
+  tipo = "imagem";             // imagem estática embutida: baixe os bytes e leia
+else
+  tipo = "nenhum";
+```
 
 Aí vem o tropeço que derruba muita gente: o captcha estar carregado no HTML não significa que ele está ativo. Alguns sites implementam um captcha mas o deixam desativado; outros trocaram de captcha e nunca removeram a implementação antiga, que segue no HTML sem disparar. Antes de gastar uma resolução, confirme qual desafio dispara de fato: olhe o que o botão de buscar realmente chama no `onclick` e qual função de captcha é de fato acionada. Resolver o captcha errado é dinheiro no lixo.
 
@@ -96,6 +115,22 @@ token = solver.tencent(app_id=app_id, url=url,                          # Tencen
 texto = solver.normal("captcha.png")["code"]                            # imagem estática
 
 # o token/texto entra no POST como se você tivesse resolvido na tela
+```
+```javascript
+const { Solver } = require("@2captcha/2captcha");
+const solver = new Solver("SUA_API_KEY");
+
+// sitekey/app_id vêm da extração do HTML (mostrada adiante)
+// cada tipo tem seu método; todos devolvem o token em .data
+let token;
+token = (await solver.turnstile({ pageurl: url, sitekey })).data;                         // Cloudflare Turnstile
+token = (await solver.recaptcha({ pageurl: url, googlekey: sitekey, invisible: 1 })).data; // reCAPTCHA v2
+token = (await solver.hcaptcha({ pageurl: url, sitekey })).data;                          // hCaptcha
+token = (await solver.tencent({ pageurl: url, appId: app_id,                             // Tencent: id = appId
+  apiServer: "https://.../TCaptcha-global.js" })).data;   // script não-padrão obrigatório, senão UNSOLVABLE
+const texto = (await solver.imageCaptcha({ body: require("fs").readFileSync("captcha.png") })).data; // imagem estática
+
+// o token/texto entra no POST como se você tivesse resolvido na tela
 ```
 
 ## Resolveu uma vez? Reuse a sessão validada
@@ -119,6 +154,25 @@ def consultar(sessao, doc):
         r = sessao.post(URL_BUSCA, data={"doc": doc})
     return r
 ```
+```javascript
+async function garantirSessao(sessao) {
+  if (sessao.validada) return;                 // já validou: reusa o cookie
+  const token = await resolverCaptcha(/* ... */);   // gasta 1 solve
+  await gotScraping.post(URL_VALIDAR, { cookieJar: sessao.jar, form: { token } });
+  sessao.validada = true;
+}
+
+async function consultar(sessao, doc) {
+  await garantirSessao(sessao);
+  let r = await gotScraping.post(URL_BUSCA, { cookieJar: sessao.jar, form: { doc } });
+  if (r.body.includes("cf-turnstile")) {       // o site repôs o desafio: revalida
+    sessao.validada = false;
+    await garantirSessao(sessao);
+    r = await gotScraping.post(URL_BUSCA, { cookieJar: sessao.jar, form: { doc } });
+  }
+  return r;
+}
+```
 
 Quanto mais documentos por sessão validada, menor o custo por resultado. O cuidado é perceber a reapresentação do desafio: se você não nota que a sessão caiu, passa a mandar consultas que o site recusa achando que está tudo certo.
 
@@ -132,6 +186,13 @@ import easyocr
 
 reader = easyocr.Reader(["en"])
 texto = "".join(reader.readtext("captcha.png", detail=0))
+```
+```javascript
+// captcha de imagem simples resolvido localmente, sem serviço pago
+const Tesseract = require("tesseract.js");
+
+const { data } = await Tesseract.recognize("captcha.png", "eng");
+const texto = data.text.trim();
 ```
 
 Vale só pros simples. Captcha de widget, "selecione as imagens com…", ou o que avalia comportamento não caem por OCR. Pra esses, é serviço (ou pior, o caso extremo lá embaixo).
@@ -156,6 +217,25 @@ for n in range(teto + 1):
         prova = base64.b64encode(json.dumps(solucao).encode()).decode()
         break
 # 'prova' entra no POST onde o site espera, como se o widget tivesse resolvido
+```
+```javascript
+const crypto = require("crypto");
+
+// captcha de proof-of-work (ALTCHA e parecidos): o desafio traz o sal,
+// o hash-alvo e o teto de busca; ache o n cujo sha256(sal+n) bate com o alvo
+const desafio = await gotScraping.get("https://exemplo.com/captcha/desafio").json();
+const { salt, challenge: alvo, maxnumber: teto } = desafio;
+
+let prova = null;
+for (let n = 0; n <= teto; n++) {
+  if (crypto.createHash("sha256").update(`${salt}${n}`).digest("hex") === alvo) {
+    const solucao = { algorithm: desafio.algorithm, challenge: alvo,
+                      number: n, salt, signature: desafio.signature };
+    prova = Buffer.from(JSON.stringify(solucao)).toString("base64");
+    break;
+  }
+}
+// 'prova' entra no POST onde o site espera, como se o widget tivesse resolvido
 ```
 
 O custo é o do laço: teto pequeno resolve em milissegundos, e como roda local não há ida e volta a serviço nem gasto por resolução. O teto regula a dificuldade: quanto maior, mais processamento o servidor te obriga a gastar por requisição.
@@ -183,6 +263,17 @@ sitekey = el["data-sitekey"] if el else None
 m = re.search(r"new TencentCaptcha\(\s*['\"]([^'\"]+)['\"]", html)
 app_id = m.group(1) if m else None
 ```
+```javascript
+const $ = cheerio.load(html);
+
+// a maioria dos widgets expõe o id no data-sitekey
+// (reCAPTCHA, hCaptcha e o Turnstile do Cloudflare seguem esse padrão)
+const sitekey = $("[data-sitekey]").attr("data-sitekey") || null;
+
+// o Tencent NÃO usa data-sitekey: o id (appId) vem no argumento do construtor
+const m = html.match(/new TencentCaptcha\(\s*['"]([^'"]+)['"]/);
+const app_id = m ? m[1] : null;
+```
 
 ## O proxy e o IP de quem resolve
 
@@ -194,6 +285,11 @@ A regra: o captcha precisa ser resolvido do mesmo IP, ou ao menos da mesma reput
 # resolve o captcha SAINDO do seu proxy, pro IP bater com o da requisição
 token = solver.turnstile(sitekey=sitekey, url=url,
                          proxy={"type": "HTTP", "uri": "user:senha@host:porta"})["code"]
+```
+```javascript
+// resolve o captcha SAINDO do seu proxy, pro IP bater com o da requisição
+const token = (await solver.turnstile({ pageurl: url, sitekey,
+  proxy: "user:senha@host:porta", proxytype: "HTTP" })).data;
 ```
 
 ## O captcha invisível por score: deixe o navegador gerar o token
@@ -212,6 +308,18 @@ page.wait_for_function(
     timeout=30000,
 )
 page.click("#botao_buscar")   # enviar antes do token: campo vazio, e o site recusa
+```
+```javascript
+// captcha invisível por score (reCAPTCHA v3 e afins): não há nada a "resolver".
+// A página enche um campo escondido com o token, de forma assíncrona; rode um
+// navegador REAL e espere o campo encher antes de enviar.
+await page.goto(url);
+await page.fill("#campo_documento", doc);
+await page.waitForFunction(() => {
+  const e = document.getElementById("token_resposta");
+  return e && e.value && e.value.length > 50;
+}, { timeout: 30000 });
+await page.click("#botao_buscar");   // enviar antes do token: campo vazio, e o site recusa
 ```
 
 O detalhe que pega é o tempo: o campo do token só enche depois que a página carrega, então enviar cedo manda um campo vazio e o site recusa sem dizer por quê. Espere o token existir no campo, não só a página ter carregado.
